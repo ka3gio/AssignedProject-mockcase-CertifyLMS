@@ -70,9 +70,9 @@ class EnrollmentController extends Controller
         if ($keyword = trim($request->string('keyword')->toString())) {
             $query->whereHas(
                 'user',
-                fn ($q) => $q
-                    ->where('name', 'LIKE', '%'.$keyword.'%')
-                    ->orWhere('email', 'LIKE', '%'.$keyword.'%'),
+                fn($q) => $q
+                    ->where('name', 'LIKE', '%' . $keyword . '%')
+                    ->orWhere('email', 'LIKE', '%' . $keyword . '%'),
             );
         }
 
@@ -116,7 +116,7 @@ class EnrollmentController extends Controller
         // admin 時のみ状態遷移ログを eager-load(管理画面の監査ビュー)
         if ($user->role === UserRole::Admin) {
             $enrollment->loadMissing([
-                'statusLogs' => fn ($q) => $q->with('changedBy')->orderByDesc('changed_at'),
+                'statusLogs' => fn($q) => $q->with('changedBy')->orderByDesc('changed_at'),
             ]);
         }
 
@@ -169,7 +169,7 @@ class EnrollmentController extends Controller
         $action($enrollment, $request->validated());
 
         return redirect()
-            ->route('dashboard.index')
+            ->route('enrollments.show', $enrollment)
             ->with('success', '目標受験日を更新しました。');
     }
 
