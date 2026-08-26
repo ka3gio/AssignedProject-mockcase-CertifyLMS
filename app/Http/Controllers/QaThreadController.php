@@ -1,35 +1,39 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Enums\CertificationStatus;
 use App\Enums\QaThreadStatus;
 use App\Http\Requests\QaThread\IndexRequest;
-use App\UseCases\QaThread\IndexAction;
-use App\UseCases\QaThread\ShowAction;
 use App\Http\Requests\QaThread\StoreRequest;
-use App\UseCases\QaThread\StoreAction;
-use Illuminate\View\View;
+use App\Http\Requests\QaThread\UpdateRequest;
 use App\Models\Certification;
 use App\Models\QaThread;
-use App\Enums\CertificationStatus;
+use App\UseCases\QaThread\DestroyAction;
+use App\UseCases\QaThread\IndexAction;
+use App\UseCases\QaThread\ResolveAction;
+use App\UseCases\QaThread\ShowAction;
+use App\UseCases\QaThread\StoreAction;
+use App\UseCases\QaThread\UnresolveAction;
+use App\UseCases\QaThread\UpdateAction;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
 
-
+/** 受講生・コーチ向けQ&Aと、adminモデレーションのスレッド操作を提供する。 */
 class QaThreadController extends Controller
 {
     public function index(IndexRequest $request, IndexAction $action): View
     {
         $validated = $request->validated();
-
         $result = $action(
             viewer: $request->user(),
             keyword: $validated['keyword'] ?? null,
-            certification_id: $validated['certification_id'] ?? null,
+            certificationId: $validated['certification_id'] ?? null,
             status: isset($validated['status']) ? QaThreadStatus::from($validated['status']) : null,
         );
 
-        // Q&Aスレッドの一覧を取得してビューに渡す処理
         return view('qa-thread.index', [
             'threads' => $result['threads'],
             'filters' => [
@@ -38,25 +42,22 @@ class QaThreadController extends Controller
                 'status' => $validated['status'] ?? '',
             ],
             'certifications' => $result['certifications'],
-            'publishedStatus' => QaThreadStatus::cases(),
+            'publishedStatus' => CertificationStatus::Published,
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function create(): View
     {
         $this->authorize('create', QaThread::class);
 
         return view('qa-thread.create', [
-            'certifications' => Certification::query()->where('status', CertificationStatus::Published->value)->get()
+            'certifications' => Certification::query()
+                ->published()
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(StoreRequest $request, StoreAction $action): RedirectResponse
     {
         $thread = $action($request->user(), $request->validated());
@@ -66,39 +67,66 @@ class QaThreadController extends Controller
             ->with('success', '質問を作成しました。');
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(QaThread $thread, ShowAction $action): View
     {
         $this->authorize('view', $thread);
 
         return view('qa-thread.show', [
-            'thread' => $action($thread)
+            'thread' => $action($thread),
         ]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
+    public function edit(QaThread $thread): View
     {
-        //
+        $this->authorize('update', $thread);
+
+        return view('qa-thread.edit', ['thread' => $thread->load('certification')]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
+    public function update(
+        QaThread $thread,
+        UpdateRequest $request,
+        UpdateAction $action,
+    ): RedirectResponse {
+        $action($thread, $request->validated());
+
+        return redirect()
+            ->route('qa-board.show', $thread)
+            ->with('success', '質問を更新しました。');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function destroy(QaThread $thread, DestroyAction $action): RedirectResponse
     {
-        //
+        $this->authorize('delete', $thread);
+
+        $action($thread);
+
+        $route = request()->routeIs('admin.*')
+            ? 'admin.qa-board.index'
+            : 'qa-board.index';
+
+        return redirect()->route($route)->with('success', '質問を削除しました。');
+    }
+
+    public function resolve(QaThread $thread, ResolveAction $action): RedirectResponse
+    {
+        $this->authorize('resolve', $thread);
+
+        $action($thread);
+
+        return redirect()
+            ->route('qa-board.show', $thread)
+            ->with('success', '質問を解決済みにしました。');
+    }
+
+    public function unresolve(QaThread $thread, UnresolveAction $action): RedirectResponse
+    {
+        $this->authorize('unresolve', $thread);
+
+        $action($thread);
+
+        return redirect()
+            ->route('qa-board.show', $thread)
+            ->with('success', '質問を未解決に戻しました。');
     }
 }

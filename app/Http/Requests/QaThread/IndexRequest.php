@@ -1,30 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\QaThread;
 
+use App\Enums\QaThreadStatus;
+use App\Models\QaThread;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class IndexRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->can('viewAny', QaThread::class) ?? false;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
+    /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
             'keyword' => ['nullable', 'string', 'max:100'],
             'certification_id' => ['nullable', 'ulid', 'exists:certifications,id'],
-            'status' => ['nullable', 'in:unresolved,resolved'],
+            'status' => ['nullable', Rule::enum(QaThreadStatus::class)],
             'page' => ['nullable', 'integer', 'min:1'],
         ];
     }

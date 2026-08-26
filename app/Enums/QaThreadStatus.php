@@ -4,19 +4,17 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-/**
-
- */
+/** 質問スレッドの解決状態。 */
 enum QaThreadStatus: string
 {
-	case Open = 'open';
-	case Resolved = 'resolved';
+    case Unresolved = 'unresolved';
+    case Resolved = 'resolved';
 
-	public function label(): string
-	{
-		return match ($this) {
-			self::Open => '未解決',
-			self::Resolved => '解決済み',
-		};
-	}
+    public function label(): string
+    {
+        return match ($this) {
+            self::Unresolved => '未解決',
+            self::Resolved => '解決済み',
+        };
+    }
 }

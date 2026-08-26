@@ -1,27 +1,22 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\QaThread;
 
-use Illuminate\Foundation\Http\FormRequest;
-use \App\Models\QaThread;
-use Illuminate\Validation\Rule;
 use App\Enums\CertificationStatus;
+use App\Models\QaThread;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return $this->user()?->can('create', QaThread::class) ?? false;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
+    /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
@@ -36,9 +31,7 @@ class StoreRequest extends FormRequest
         ];
     }
 
-    /**
-     * @return array<string, string, string>
-     */
+    /** @return array<string, string> */
     public function attributes(): array
     {
         return [

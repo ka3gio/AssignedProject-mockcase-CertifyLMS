@@ -1,79 +1,75 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
+use App\Enums\CertificationStatus;
+use App\Enums\UserRole;
 use App\Models\QaThread;
 use App\Models\User;
-use App\Enums\UserRole;
-use App\Enums\CertificationStatus;
-use Illuminate\Auth\Access\Response;
 
 class QaThreadPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
     public function viewAny(User $user): bool
     {
         return true;
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
-    public function view(User $user, QaThread $qaThread): bool
+    public function view(User $user, QaThread $thread): bool
     {
-        if ($qaThread->certification->status !== CertificationStatus::Published) {
+        if ($user->role === UserRole::Admin) {
+            return true;
+        }
+
+        if ($thread->certification->status !== CertificationStatus::Published) {
             return false;
         }
 
         return match ($user->role) {
             UserRole::Student => true,
-            UserRole::Coach => $qaThread->certification
+            UserRole::Coach => $thread->certification
                 ->coaches()
-                ->where('users.id', $user->id)
+                ->whereKey($user->id)
                 ->exists(),
             default => false,
         };
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
     public function create(User $user): bool
     {
         return $user->role === UserRole::Student;
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
-    public function update(User $user, QaThread $qaThread): bool
+    public function update(User $user, QaThread $thread): bool
     {
-        return $user->role === UserRole::Student && $user->id === $qaThread->user_id;
+        return $this->isVisibleStudentAuthor($user, $thread);
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
-    public function delete(User $user, QaThread $qaThread): bool
+    public function delete(User $user, QaThread $thread): bool
     {
-        return $user->role === UserRole::Student && $user->id === $qaThread->user_id;
+        if ($user->role === UserRole::Admin) {
+            return true;
+        }
+
+        return $this->isVisibleStudentAuthor($user, $thread)
+            && $thread->replies()->doesntExist();
     }
 
-    /**
-     * Determine whether the user can restore the model.
-     */
-    public function restore(User $user, QaThread $qaThread): bool
+    public function resolve(User $user, QaThread $thread): bool
     {
-        return true;
+        return $this->isVisibleStudentAuthor($user, $thread);
     }
 
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
-    public function forceDelete(User $user, QaThread $qaThread): bool
+    public function unresolve(User $user, QaThread $thread): bool
     {
-        return true;
+        return $this->isVisibleStudentAuthor($user, $thread);
+    }
+
+    private function isVisibleStudentAuthor(User $user, QaThread $thread): bool
+    {
+        return $user->role === UserRole::Student
+            && $user->id === $thread->user_id
+            && $thread->certification->status === CertificationStatus::Published;
     }
 }

@@ -1,17 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
+use App\Enums\QaThreadStatus;
+use App\Enums\UserRole;
+use Database\Factories\QaThreadFactory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Builder;
-use App\Enums\QaThreadStatus;
-use Illuminate\Database\Eloquent\Concerns\HasUlids;
 
+/** 公開Q&A掲示板の質問スレッド。 */
 class QaThread extends Model
 {
+    /** @use HasFactory<QaThreadFactory> */
     use HasFactory, HasUlids;
 
     protected $fillable = [
@@ -28,25 +34,19 @@ class QaThread extends Model
         'resolved_at' => 'datetime',
     ];
 
-    /**
-     * @return BelongsTo<Certification, $this>
-     */
+    /** @return BelongsTo<Certification, $this> */
     public function certification(): BelongsTo
     {
         return $this->belongsTo(Certification::class);
     }
 
-    /**
-     * @return BelongsTo<User, $this>
-     */
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * @return HasMany<QaReply, $this>
-     */
+    /** @return HasMany<QaReply, $this> */
     public function replies(): HasMany
     {
         return $this->hasMany(QaReply::class);
@@ -58,11 +58,26 @@ class QaThread extends Model
             return $query;
         }
 
-        $like = '%' . $keyword . '%';
+        $like = '%'.$keyword.'%';
 
-        return $query->where(function (Builder $q) use ($like) {
-            $q->where('title', 'LIKE', $like)
+        return $query->where(function (Builder $query) use ($like): void {
+            $query->where('title', 'LIKE', $like)
                 ->orWhere('body', 'LIKE', $like);
         });
+    }
+
+    /** 公開側でユーザーが閲覧できるスレッドだけに絞る。 */
+    public function scopeVisibleFor(Builder $query, User $viewer): Builder
+    {
+        return $query->whereHas(
+            'certification',
+            function (Builder $certifications) use ($viewer): void {
+                $certifications->published();
+
+                if ($viewer->role === UserRole::Coach) {
+                    $certifications->assignedTo($viewer);
+                }
+            },
+        );
     }
 }
