@@ -29,6 +29,10 @@ final class IndexAction
     {
         $enrollments = Enrollment::query()
             ->forUser($student)
+            ->whereHas(
+                'certification',
+                fn($query) => $query->published(),
+            )
             ->whereIn('status', [
                 EnrollmentStatus::Learning->value,
                 EnrollmentStatus::Passed->value,

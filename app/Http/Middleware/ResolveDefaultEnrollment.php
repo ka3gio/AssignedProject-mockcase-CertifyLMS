@@ -25,7 +25,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ResolveDefaultEnrollment
 {
-    public function __construct(private readonly DefaultEnrollmentService $resolver) {}
+    public function __construct(private readonly DefaultEnrollmentService $resolver)
+    {
+    }
 
     public function handle(Request $request, Closure $next, string $routeName): Response
     {
@@ -49,6 +51,10 @@ class ResolveDefaultEnrollment
 
         $activeEnrollments = $user->enrollments()
             ->whereIn('status', [EnrollmentStatus::Learning->value, EnrollmentStatus::Passed->value])
+            ->whereHas(
+                'certification',
+                fn($query) => $query->published(),
+            )
             ->get();
 
         if ($activeEnrollments->count() === 1) {

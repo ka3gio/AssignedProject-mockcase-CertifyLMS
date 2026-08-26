@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\UseCases\Learning;
 
 use App\Enums\ContentStatus;
+use App\Enums\CertificationStatus;
 use App\Models\Chapter;
 use App\Models\Enrollment;
 use App\Models\Part;
@@ -13,6 +14,7 @@ use App\Services\LearningHourTargetService;
 use App\Services\SectionQuestionScoreService;
 use App\Services\StreakService;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * /learning/enrollments/{enrollment} (2 階層目、教材 Part 一覧) のデータを準備する Action。
@@ -28,7 +30,8 @@ final class ShowEnrollmentAction
         private readonly StreakService $streakService,
         private readonly LearningHourTargetService $hourTargetService,
         private readonly SectionQuestionScoreService $scoreService,
-    ) {}
+    ) {
+    }
 
     /**
      * @return array<string, mixed>
@@ -37,16 +40,20 @@ final class ShowEnrollmentAction
     {
         $enrollment->loadMissing(['certification', 'user', 'learningHourTarget']);
 
+        if ($enrollment->certification?->status !== CertificationStatus::Published) {
+            throw new NotFoundHttpException;
+        }
+
         $parts = $enrollment->certification
-            ?->parts()
+                ?->parts()
             ->where('status', ContentStatus::Published->value)
             ->ordered()
             ->with([
-                'chapters' => fn ($query) => $query
+                'chapters' => fn($query) => $query
                     ->where('status', ContentStatus::Published->value)
                     ->ordered()
                     ->with([
-                        'sections' => fn ($q) => $q
+                        'sections' => fn($q) => $q
                             ->where('status', ContentStatus::Published->value)
                             ->ordered(),
                     ]),

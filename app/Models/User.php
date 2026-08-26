@@ -116,6 +116,10 @@ class User extends Authenticatable
         return $this->enrollments()
             ->whereIn('status', [EnrollmentStatus::Learning->value, EnrollmentStatus::Passed->value])
             ->with('certification')
+            ->whereHas(
+                'certification',
+                fn($query) => $query->published(),
+            )
             ->orderBy('created_at');
     }
 
@@ -295,7 +299,7 @@ class User extends Authenticatable
      */
     public function receivesBroadcastNotificationsOn(): string
     {
-        return 'notifications.'.$this->id;
+        return 'notifications.' . $this->id;
     }
 
     /**
