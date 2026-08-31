@@ -65,7 +65,7 @@ final class OnboardAction
             $now = now();
 
             $attrs = [
-                'from_status' => $user->status->value,
+                'status' => UserStatus::InProgress,
                 'name' => $validated['name'],
                 'bio' => $validated['bio'] ?? null,
                 'password' => Hash::make($validated['password']),
