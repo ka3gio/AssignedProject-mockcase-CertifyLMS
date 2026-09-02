@@ -33,7 +33,8 @@ final class OnboardAction
     public function __construct(
         private readonly UserStatusChangeService $statusChanger,
         private readonly GrantInitialQuotaAction $grantInitial,
-    ) {}
+    ) {
+    }
 
     /**
      * @param array{name: string, bio?: ?string, password: string, meeting_url?: string} $validated
@@ -64,6 +65,7 @@ final class OnboardAction
             $now = now();
 
             $attrs = [
+                'status' => UserStatus::InProgress,
                 'name' => $validated['name'],
                 'bio' => $validated['bio'] ?? null,
                 'password' => Hash::make($validated['password']),
@@ -90,6 +92,11 @@ final class OnboardAction
             );
 
             $user->forceFill($attrs)->save();
+
+            $invitation->update([
+                'status' => InvitationStatus::Accepted,
+                'accepted_at' => $now,
+            ]);
 
             // 面談クォータは受講生固有の消費対象。コーチは面談を提供する側のため初期付与しない。
             if ($user->role === UserRole::Student && $user->plan->default_meeting_quota > 0) {
