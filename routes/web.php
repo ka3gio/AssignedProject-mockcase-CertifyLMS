@@ -25,6 +25,7 @@ use App\Http\Controllers\MockExamQuestionController;
 use App\Http\Controllers\MockExamSessionController;
 use App\Http\Controllers\MockExamSessionMonitorController;
 use App\Http\Controllers\PartController;
+use App\Http\Controllers\PlanController;
 use App\Http\Controllers\QuestionCategoryController;
 use App\Http\Controllers\QuizHistoryController;
 use App\Http\Controllers\QuizStatsController;
@@ -149,6 +150,17 @@ Route::middleware(['auth', 'role:student', 'active-learning'])
 // admin 専用ルート
 // ============================================================
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
+    // プランマスタ管理(CRUD + 公開状態遷移、admin のみ)
+    Route::resource('plans', PlanController::class)
+        ->parameters(['plans' => 'plan'])
+        ->names('admin.plans');
+    Route::post('plans/{plan}/publish', [PlanController::class, 'publish'])
+        ->name('admin.plans.publish');
+    Route::post('plans/{plan}/archive', [PlanController::class, 'archive'])
+        ->name('admin.plans.archive');
+    Route::post('plans/{plan}/unarchive', [PlanController::class, 'unarchive'])
+        ->name('admin.plans.unarchive');
+
     // ユーザー管理
     Route::get('users', [UserController::class, 'index'])->name('admin.users.index');
     Route::get('users/{user}', [UserController::class, 'show'])

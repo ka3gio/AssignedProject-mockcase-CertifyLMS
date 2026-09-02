@@ -18,6 +18,7 @@ use App\Models\MockExam;
 use App\Models\MockExamQuestion;
 use App\Models\MockExamSession;
 use App\Models\Part;
+use App\Models\Plan;
 use App\Models\QuestionCategory;
 use App\Models\Section;
 use App\Models\SectionImage;
@@ -43,6 +44,7 @@ use App\Policies\MockExamQuestionPolicy;
 use App\Policies\MockExamSessionPolicy;
 use App\Policies\PartPolicy;
 use App\Policies\PartViewPolicy;
+use App\Policies\PlanPolicy;
 use App\Policies\QuestionCategoryPolicy;
 use App\Policies\SectionImagePolicy;
 use App\Policies\SectionPolicy;
@@ -70,6 +72,7 @@ class AuthServiceProvider extends ServiceProvider
         Certification::class => CertificationPolicy::class,
         CertificationCategory::class => CertificationCategoryPolicy::class,
         Part::class => PartPolicy::class,
+        Plan::class => PlanPolicy::class,
         Chapter::class => ChapterPolicy::class,
         ChatRoom::class => ChatRoomPolicy::class,
         Section::class => SectionPolicy::class,
