@@ -13,7 +13,8 @@ class QaReplyPolicy
 {
     public function create(User $user, QaThread $thread): bool
     {
-        return $user->can('view', $thread);
+        return in_array($user->role, [UserRole::Student, UserRole::Coach], true)
+            && $user->can('view', $thread);
     }
 
     public function update(User $user, QaReply $reply): bool
