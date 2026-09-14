@@ -6,6 +6,7 @@ namespace Tests\Feature\Seeders;
 
 use App\Enums\QaThreadStatus;
 use App\Models\Certification;
+use App\Models\QaThread;
 use App\Models\User;
 use Database\Seeders\QaBoardSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,7 +19,7 @@ class QaBoardSeederTest extends TestCase
     public function test_seeds_mixed_threads_replies_and_unpublished_moderation_data(): void
     {
         $student = User::factory()->student()->create(['email' => 'student@certify-lms.test']);
-        User::factory()->student()->create(['email' => 'student-noquota@certify-lms.test']);
+        $otherStudent = User::factory()->student()->create(['email' => 'student-noquota@certify-lms.test']);
         $published = Certification::factory()->published()->create();
         $draft = Certification::factory()->draft()->create();
 
@@ -38,5 +39,16 @@ class QaBoardSeederTest extends TestCase
         $this->assertDatabaseHas('qa_threads', [
             'certification_id' => $draft->id,
         ]);
+        $this->assertSame(1, QaThread::query()
+            ->where('certification_id', $published->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail()
+            ->replies()
+            ->count());
+        $this->assertTrue(QaThread::query()
+            ->where('certification_id', $published->id)
+            ->where('user_id', $otherStudent->id)
+            ->whereDoesntHave('replies')
+            ->exists());
     }
 }

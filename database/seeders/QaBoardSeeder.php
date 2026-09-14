@@ -48,7 +48,7 @@ final class QaBoardSeeder extends Seeder
                     ? $factory->resolved()->create(['resolved_at' => $createdAt->copy()->addHours(6)])
                     : $factory->unresolved()->create();
 
-                $replyCount = [0, 1, 3][$threadIndex];
+                $replyCount = [1, 0, 3][$threadIndex];
                 for ($replyIndex = 0; $replyIndex < $replyCount; $replyIndex++) {
                     $author = $certification->coaches->get($replyIndex % max(1, $certification->coaches->count()))
                         ?? $otherStudent;

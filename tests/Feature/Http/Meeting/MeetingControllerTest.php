@@ -13,6 +13,7 @@ use App\Models\Meeting;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -113,6 +114,10 @@ class MeetingControllerTest extends TestCase
             'enrollment_id' => $enrollment->id,
             'status' => MeetingStatus::Reserved->value,
         ]);
+        $this->assertSame(1, $coach->notifications()->count());
+        $this->assertSame('meeting_reserved', $coach->notifications()->sole()->data['notification_type']);
+        $this->assertSame(0, $student->notifications()->count());
+        $this->assertCount(1, Mail::mailer()->getSymfonyTransport()->messages());
     }
 
     public function test_store_rejects_non_zero_minutes(): void
@@ -162,6 +167,26 @@ class MeetingControllerTest extends TestCase
 
         $response->assertRedirect();
         $this->assertSame(MeetingStatus::Canceled, $meeting->fresh()->status);
+        $this->assertSame(1, $coach->notifications()->count());
+        $this->assertSame('meeting_canceled', $coach->notifications()->sole()->data['notification_type']);
+        $this->assertSame(0, $student->notifications()->count());
+        $this->assertCount(1, Mail::mailer()->getSymfonyTransport()->messages());
+    }
+
+    public function test_coach_cancellation_notifies_student_only(): void
+    {
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 5]);
+        $coach = User::factory()->coach()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create([
+            'scheduled_at' => now()->addDays(3)->startOfHour(),
+        ]);
+
+        $this->actingAs($coach)->post(route('meetings.cancel', $meeting))->assertRedirect();
+
+        $this->assertSame(1, $student->notifications()->count());
+        $this->assertSame('meeting_canceled', $student->notifications()->sole()->data['notification_type']);
+        $this->assertSame(0, $coach->notifications()->count());
+        $this->assertCount(1, Mail::mailer()->getSymfonyTransport()->messages());
     }
 
     public function test_index_as_coach_only_lists_own_meetings(): void
