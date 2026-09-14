@@ -81,6 +81,14 @@ class Enrollment extends Model
     }
 
     /**
+     * @return HasMany<EnrollmentNote, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(EnrollmentNote::class);
+    }
+
+    /**
      * 最新の状態遷移ログ 1 件のみ。一覧で「直近の遷移理由」を表示するための eager load 用途。
      *
      * @return HasOne<EnrollmentStatusLog, $this>
