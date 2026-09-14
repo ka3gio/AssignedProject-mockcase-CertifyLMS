@@ -20,7 +20,8 @@ final class DestroyAction
 {
     public function __construct(
         private readonly DefaultEnrollmentService $defaultEnrollmentService,
-    ) {}
+    ) {
+    }
 
     /**
      * @throws EnrollmentInvalidTransitionException
@@ -34,6 +35,7 @@ final class DestroyAction
         DB::transaction(function () use ($enrollment) {
             $user = $enrollment->user;
 
+            $enrollment->goals()->delete();
             $enrollment->delete();
 
             $this->defaultEnrollmentService->resolveAfterStatusChange($user, $enrollment);

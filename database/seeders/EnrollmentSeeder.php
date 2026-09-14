@@ -12,6 +12,7 @@ use App\Enums\UserStatus;
 use App\Models\Certificate;
 use App\Models\Certification;
 use App\Models\Enrollment;
+use App\Models\EnrollmentGoal;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -152,6 +153,10 @@ final class EnrollmentSeeder extends Seeder
                     'changed_reason' => '新規登録',
                 ],
             );
+
+            if ($index === 0) {
+                $this->seedFixedStudentGoals($enrollment);
+            }
         }
     }
 
@@ -201,11 +206,60 @@ final class EnrollmentSeeder extends Seeder
             ]);
 
             $this->seedStatusLogs($enrollment, $pattern['state'], $student);
+            $this->seedDemoGoal($enrollment, $i);
 
             if ($pattern['state'] === 'passed') {
                 $this->issueCertificate($enrollment, $passedAt);
             }
         }
+    }
+
+    /**
+     * 固定受講生の先頭 Enrollment に、達成済・未達成の確認用目標を投入する。
+     */
+    private function seedFixedStudentGoals(Enrollment $enrollment): void
+    {
+        EnrollmentGoal::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'title' => '過去問5年分を解き終える',
+            ],
+            [
+                'description' => '間違えた問題は解説を読み、翌日に解き直す。',
+                'target_date' => now()->addMonth()->toDateString(),
+                'achieved_at' => null,
+            ],
+        );
+
+        EnrollmentGoal::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'title' => '基礎教材を一周する',
+            ],
+            [
+                'description' => '全Sectionを読み、章末問題まで完了する。',
+                'target_date' => now()->subWeek()->toDateString(),
+                'achieved_at' => now()->subDays(3),
+            ],
+        );
+    }
+
+    /**
+     * demo 受講生の Enrollment に、認可確認用の個人目標を散らす。
+     */
+    private function seedDemoGoal(Enrollment $enrollment, int $index): void
+    {
+        EnrollmentGoal::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'title' => '今月の学習計画を完了する',
+            ],
+            [
+                'description' => $index % 2 === 0 ? '平日は毎日30分以上学習する。' : null,
+                'target_date' => now()->addDays(14 + $index)->toDateString(),
+                'achieved_at' => $index % 3 === 0 ? now()->subDay() : null,
+            ],
+        );
     }
 
     private function seedStatusLogs(Enrollment $enrollment, string $finalState, User $student): void
