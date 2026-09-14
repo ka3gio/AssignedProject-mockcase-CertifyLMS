@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * 担当コーチは Enrollment に直接紐づかず、Certification 経由(certification_coach_assignments、資格 × N コーチ N:N)
  * で参照する。修了は受講生「修了証を受け取る」自己発火で即時 passed 遷移し、admin 承認フローは持たない。
  *
- * 関連: User(受講生) / Certification / Certificate(発行済修了証) / EnrollmentStatusLog / MockExamSession
+ * 関連: User(受講生) / Certification / Certificate(発行済修了証) / EnrollmentStatusLog / EnrollmentGoal / MockExamSession
  * 逆リレーション: defaultedByUser(受講生がデフォルト資格として指している場合のみ存在)
  * scope: learning() / passed() / failed() / forUser(User)(admin = 全件 / coach = 担当資格の Enrollment / student = 自分の Enrollment)
  */
@@ -151,6 +151,17 @@ class Enrollment extends Model
         return $this->hasOne(LearningHourTarget::class);
     }
 
+    /**
+     * 個人目標一覧。未達成を先に、同一達成状態では期日が近い順(未設定は最後)で返す。
+     *
+     * @return HasMany<EnrollmentGoal, $this>
+     */
+    public function goals(): HasMany
+    {
+        return $this->hasMany(EnrollmentGoal::class)
+            ->displayOrder();
+    }
+
     public function scopeLearning(Builder $query): Builder
     {
         return $query->where('status', EnrollmentStatus::Learning->value);
@@ -180,7 +191,7 @@ class Enrollment extends Model
             UserRole::Admin => $query,
             UserRole::Coach => $query->whereHas(
                 'certification',
-                fn(Builder $q) => $q->AssignedTo($user)
+                fn (Builder $q) => $q->AssignedTo($user)
             ),
             UserRole::Student => $query->where('user_id', $user->id),
             default => $query->whereRaw('1 = 0'),
