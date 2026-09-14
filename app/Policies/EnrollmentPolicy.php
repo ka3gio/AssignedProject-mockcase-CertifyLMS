@@ -6,6 +6,7 @@ namespace App\Policies;
 
 use App\Enums\EnrollmentStatus;
 use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Models\Enrollment;
 use App\Models\User;
 
@@ -26,14 +27,18 @@ class EnrollmentPolicy
 {
     public function viewAny(User $user): bool
     {
-        return in_array($user->role, [UserRole::Admin, UserRole::Coach, UserRole::Student], true);
+        return match ($user->role) {
+            UserRole::Admin, UserRole::Coach => true,
+            UserRole::Student => $user->status === UserStatus::InProgress,
+        };
     }
 
     public function view(User $user, Enrollment $enrollment): bool
     {
         return match ($user->role) {
             UserRole::Admin => true,
-            UserRole::Student => $enrollment->user_id === $user->id,
+            UserRole::Student => $user->status === UserStatus::InProgress
+                && $enrollment->user_id === $user->id,
             UserRole::Coach => $this->isAssignedCoach($enrollment, $user),
         };
     }
