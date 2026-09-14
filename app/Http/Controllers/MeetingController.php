@@ -20,6 +20,7 @@ use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\MeetingMemo;
 use App\Models\User;
+use App\Services\BusinessNotificationService;
 use App\Services\CoachMeetingLoadService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
@@ -167,6 +168,7 @@ class MeetingController extends Controller
         CoachMeetingLoadService $coachLoadService,
         MeetingQuotaService $quotaService,
         ConsumeQuotaAction $consumeAction,
+        BusinessNotificationService $notifications,
     ): RedirectResponse {
         $scheduledAt = Carbon::parse($request->validated('scheduled_at'));
         $topic = $request->validated('topic');
@@ -207,6 +209,8 @@ class MeetingController extends Controller
             return $meeting->fresh();
         });
 
+        $notifications->notifyMeetingReserved($meeting);
+
         return redirect()
             ->route('meetings.show', $meeting)
             ->with('success', '面談を予約しました。');
@@ -219,6 +223,7 @@ class MeetingController extends Controller
     public function cancel(
         Meeting $meeting,
         RefundQuotaAction $refundAction,
+        BusinessNotificationService $notifications,
     ): RedirectResponse {
         $this->authorize('cancel', $meeting);
 
@@ -242,6 +247,8 @@ class MeetingController extends Controller
 
             ($refundAction)($locked->student, $meeting->id);
         });
+
+        $notifications->notifyMeetingCanceled($meeting->refresh(), $actor);
 
         return redirect()
             ->route('meetings.show', $meeting)

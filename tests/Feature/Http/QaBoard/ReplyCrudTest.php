@@ -7,13 +7,62 @@ namespace Tests\Feature\Http\QaBoard;
 use App\Models\QaReply;
 use App\Models\QaThread;
 use App\Models\User;
+use App\Services\BusinessNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\Support\QaBoardTestHelpers;
 use Tests\TestCase;
 
 class ReplyCrudTest extends TestCase
 {
     use QaBoardTestHelpers, RefreshDatabase;
+
+    public function test_new_reply_notifies_thread_author_but_self_reply_does_not(): void
+    {
+        $author = User::factory()->student()->inProgress()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $thread = QaThread::factory()->for($author, 'user')->create();
+        $this->assignCoach($thread->certification, $coach);
+
+        $this->actingAs($coach)->post(route('qa-board.replies.store', $thread), [
+            'body' => '回答しました',
+        ])->assertRedirect(route('qa-board.show', $thread));
+
+        $this->assertSame(1, $author->notifications()->count());
+        $notification = $author->notifications()->sole();
+        $this->assertSame('qa_reply_received', $notification->data['notification_type']);
+        $this->assertSame(route('qa-board.show', $thread, false), $notification->data['url']);
+        $this->assertCount(1, Mail::mailer()->getSymfonyTransport()->messages());
+
+        $this->actingAs($author)->post(route('qa-board.replies.store', $thread), [
+            'body' => '自己回答',
+        ])->assertRedirect(route('qa-board.show', $thread));
+
+        $this->assertSame(1, $author->notifications()->count());
+        $this->assertSame(0, $coach->notifications()->count());
+        $this->assertCount(1, Mail::mailer()->getSymfonyTransport()->messages());
+    }
+
+    public function test_reply_does_not_notify_graduated_or_deleted_thread_author(): void
+    {
+        $graduated = User::factory()->student()->graduated()->create();
+        $deleted = User::factory()->student()->inProgress()->create();
+        $replier = User::factory()->coach()->inProgress()->create();
+
+        foreach ([$graduated, $deleted] as $author) {
+            $thread = QaThread::factory()->for($author, 'user')->create();
+            $reply = QaReply::factory()->for($thread, 'thread')->for($replier, 'user')->create();
+
+            if ($author->is($deleted)) {
+                $author->delete();
+            }
+
+            app(BusinessNotificationService::class)->notifyQaReplyReceived($reply);
+            $this->assertSame(0, $author->notifications()->count());
+        }
+
+        $this->assertCount(0, Mail::mailer()->getSymfonyTransport()->messages());
+    }
 
     public function test_student_and_assigned_coach_can_reply_including_resolved_thread(): void
     {

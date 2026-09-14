@@ -7,11 +7,14 @@ namespace App\UseCases\QaReply;
 use App\Models\QaReply;
 use App\Models\QaThread;
 use App\Models\User;
+use App\Services\BusinessNotificationService;
 use Illuminate\Support\Facades\DB;
 
 /** 質問へ回答を投稿する。 */
 final class StoreAction
 {
+    public function __construct(private readonly BusinessNotificationService $notifications) {}
+
     /** @param array{body: string} $validated */
     public function __invoke(User $user, QaThread $thread, array $validated): QaReply
     {
@@ -21,6 +24,8 @@ final class StoreAction
                 'body' => $validated['body'],
             ]);
             $thread->touch();
+
+            DB::afterCommit(fn () => $this->notifications->notifyQaReplyReceived($reply));
 
             return $reply;
         });
