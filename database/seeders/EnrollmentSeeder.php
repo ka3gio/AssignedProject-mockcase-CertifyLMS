@@ -12,6 +12,7 @@ use App\Enums\UserStatus;
 use App\Models\Certificate;
 use App\Models\Certification;
 use App\Models\Enrollment;
+use App\Models\EnrollmentNote;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -152,6 +153,8 @@ final class EnrollmentSeeder extends Seeder
                     'changed_reason' => '新規登録',
                 ],
             );
+
+            $this->seedNotes($enrollment, $admin, $index);
         }
     }
 
@@ -201,6 +204,7 @@ final class EnrollmentSeeder extends Seeder
             ]);
 
             $this->seedStatusLogs($enrollment, $pattern['state'], $student);
+            $this->seedNotes($enrollment, $admin, $i);
 
             if ($pattern['state'] === 'passed') {
                 $this->issueCertificate($enrollment, $passedAt);
@@ -236,6 +240,40 @@ final class EnrollmentSeeder extends Seeder
                 'changed_at' => now()->subDay(),
                 'changed_reason' => '試験日超過による自動失敗',
             ]);
+        }
+    }
+
+    /**
+     * 担当コーチと管理者のメモを混在させ、作成者別の操作表示を確認できる状態にする。
+     */
+    private function seedNotes(Enrollment $enrollment, ?User $admin, int $index): void
+    {
+        $coaches = $enrollment->certification->coaches()->get();
+
+        foreach ($coaches as $coachIndex => $coach) {
+            EnrollmentNote::factory()
+                ->forEnrollment($enrollment)
+                ->authoredBy($coach)
+                ->create([
+                    'body' => match (($index + $coachIndex) % 3) {
+                        0 => "最近、チャットへの返信が少し遅れています。\n次回面談で学習時間を確認します。",
+                        1 => 'Q&Aでデータベース設計の論点に躓いていたため、復習状況をフォローします。',
+                        default => '模試の得点は安定しています。苦手分野の反復状況を継続して確認します。',
+                    },
+                    'created_at' => now()->subDays(7 - min($index + $coachIndex, 6)),
+                    'updated_at' => now()->subDays(7 - min($index + $coachIndex, 6)),
+                ]);
+        }
+
+        if ($admin !== null && $index % 2 === 0) {
+            EnrollmentNote::factory()
+                ->forEnrollment($enrollment)
+                ->authoredBy($admin)
+                ->create([
+                    'body' => '運営確認: 次回フォロー時に学習計画の更新状況を確認してください。',
+                    'created_at' => now()->subDays(2),
+                    'updated_at' => now()->subDays(2),
+                ]);
         }
     }
 
