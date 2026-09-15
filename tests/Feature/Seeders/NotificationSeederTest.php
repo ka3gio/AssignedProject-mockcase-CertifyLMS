@@ -44,7 +44,8 @@ final class NotificationSeederTest extends TestCase
         ];
 
         foreach ($users as $user) {
-            $notifications = $user->notifications()->get();
+            $notifications = $user->notifications()->get()
+                ->reject(fn ($notification) => $notification->data['notification_type'] === 'admin_announcement');
             $types = $notifications
                 ->pluck('data.notification_type')
                 ->unique()

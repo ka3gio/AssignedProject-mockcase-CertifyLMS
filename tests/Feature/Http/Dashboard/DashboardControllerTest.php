@@ -8,6 +8,7 @@ use App\Models\Certificate;
 use App\Models\Certification;
 use App\Models\Chapter;
 use App\Models\Enrollment;
+use App\Models\EnrollmentGoal;
 use App\Models\LearningSession;
 use App\Models\Part;
 use App\Models\Plan;
@@ -57,6 +58,32 @@ class DashboardControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertViewIs('dashboard.student');
+    }
+
+    public function test_student_dashboard_displays_own_goals_in_display_order(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $enrollment = Enrollment::factory()->for($student)->learning()->create();
+        $otherEnrollment = Enrollment::factory()->learning()->create();
+
+        EnrollmentGoal::factory()->forEnrollment($enrollment)->achieved()->create([
+            'title' => '達成済みの目標',
+            'target_date' => now()->subDay(),
+        ]);
+        EnrollmentGoal::factory()->forEnrollment($enrollment)->create([
+            'title' => '未達成の目標',
+            'target_date' => now()->addWeek(),
+        ]);
+        EnrollmentGoal::factory()->forEnrollment($otherEnrollment)->create([
+            'title' => '他人の目標',
+        ]);
+
+        $this->actingAs($student)
+            ->get(route('dashboard.index'))
+            ->assertOk()
+            ->assertSeeInOrder(['未達成の目標', '達成済みの目標'])
+            ->assertDontSee('他人の目標')
+            ->assertDontSee('個人目標を取得できませんでした。');
     }
 
     public function test_graduated_student_sees_graduated_dashboard_blade(): void

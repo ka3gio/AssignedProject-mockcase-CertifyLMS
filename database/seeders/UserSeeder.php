@@ -53,6 +53,7 @@ class UserSeeder extends Seeder
                 'email' => 'admin@certify-lms.test',
                 'password' => $defaultPassword,
                 'status' => UserStatus::InProgress->value,
+                'avatar_url' => '/images/logo/logo-mark.png',
                 'profile_setup_completed' => true,
                 'email_verified_at' => $now,
             ])

@@ -283,6 +283,16 @@ class User extends Authenticatable
     }
 
     /**
+     * 自身が作成した受講登録メモ一覧。
+     *
+     * @return HasMany<EnrollmentNote, $this>
+     */
+    public function authoredEnrollmentNotes(): HasMany
+    {
+        return $this->hasMany(EnrollmentNote::class, 'author_user_id');
+    }
+
+    /**
      * Laravel フレームワーク側のシグナル(`Illuminate\Foundation\Auth\User::sendPasswordResetNotification($token)`)
      * との LSP 整合のため、引数に型宣言を付与しない(親クラスが parameter type なしで宣言しているため)。
      *
