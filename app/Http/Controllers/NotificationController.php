@@ -10,7 +10,7 @@ use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\View\View;
 
 /**
- * 認証ユーザー本人の DatabaseNotification 一覧と既読化を提供する。
+ * 認証ユーザー本人の DatabaseNotification 一覧・詳細と既読化を提供する。
  *
  * 通知 ID は UUID で推測困難だが、個別既読化では notifiable も照合し、他人の通知を
  * Route Model Binding で指定されても状態を変更しない。通知の遷移先は内部相対 URL のみ許可する。
@@ -33,6 +33,19 @@ final class NotificationController extends Controller
             'unreadCount' => $user->unreadNotifications()->count(),
             'tab' => $tab,
         ]);
+    }
+
+    public function show(Request $request, DatabaseNotification $notification): View
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $notification->notifiable_id === $user->getKey()
+                && $notification->notifiable_type === $user->getMorphClass(),
+            403,
+        );
+
+        return view('notifications.show', compact('notification'));
     }
 
     public function markAsRead(Request $request, DatabaseNotification $notification): RedirectResponse

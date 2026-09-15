@@ -4,21 +4,40 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\AnnouncementTargetType;
+use App\Enums\EnrollmentStatus;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Models\Announcement;
 use App\Models\ChatMessage;
 use App\Models\Meeting;
 use App\Models\QaReply;
 use App\Models\User;
+use App\Notifications\Announcement\AdminAnnouncementNotification;
 use App\Notifications\ChatMessageReceivedNotification;
 use App\Notifications\MeetingCanceledNotification;
 use App\Notifications\MeetingReservedNotification;
 use App\Notifications\QaReplyReceivedNotification;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Notification;
 
-/** 業務イベントの当事者から、新規通知を受け取れるユーザーだけを選ぶ。 */
+/** 通知種別ごとに受信可能なユーザーを選定し、業務通知を送信する。 */
 final class BusinessNotificationService
 {
+    public function notifyAnnouncement(Announcement $announcement): int
+    {
+        $recipients = $this->announcementRecipients($announcement);
+
+        if ($recipients->isEmpty()) {
+            return 0;
+        }
+
+        Notification::send($recipients, new AdminAnnouncementNotification($announcement));
+
+        return $recipients->count();
+    }
+
     public function notifyChatMessageReceived(ChatMessage $message): void
     {
         $message->loadMissing('chatRoom.enrollment.certification');
@@ -79,6 +98,30 @@ final class BusinessNotificationService
         }
 
         Notification::send($recipient, new MeetingCanceledNotification($meeting, $actor));
+    }
+
+    /** @return Collection<int, User> */
+    private function announcementRecipients(Announcement $announcement): Collection
+    {
+        $query = User::query()
+            ->where('role', UserRole::Student->value)
+            ->where('status', UserStatus::InProgress->value);
+
+        match ($announcement->target_type) {
+            AnnouncementTargetType::AllStudents => null,
+            AnnouncementTargetType::Certification => $query->whereHas(
+                'enrollments',
+                fn (Builder $enrollments) => $enrollments
+                    ->where('certification_id', $announcement->target_certification_id)
+                    ->whereIn('status', [
+                        EnrollmentStatus::Learning->value,
+                        EnrollmentStatus::Passed->value,
+                    ]),
+            ),
+            AnnouncementTargetType::User => $query->whereKey($announcement->target_user_id),
+        };
+
+        return $query->orderBy('id')->get();
     }
 
     private function canReceive(?User $user): bool
