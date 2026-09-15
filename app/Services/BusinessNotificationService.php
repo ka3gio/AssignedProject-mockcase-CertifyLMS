@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Notifications\Announcement\AdminAnnouncementNotification;
 use App\Notifications\ChatMessageReceivedNotification;
 use App\Notifications\MeetingCanceledNotification;
+use App\Notifications\MeetingReminderNotification;
 use App\Notifications\MeetingReservedNotification;
 use App\Notifications\QaReplyReceivedNotification;
 use Illuminate\Database\Eloquent\Builder;
@@ -100,6 +101,22 @@ final class BusinessNotificationService
         Notification::send($recipient, new MeetingCanceledNotification($meeting, $actor));
     }
 
+    /**
+     * 面談リマインダーを、通知を受信できる当事者へ送信する。
+     *
+     * @return bool 通知を送信した場合は true、受信対象外の場合は false
+     */
+    public function notifyMeetingReminder(Meeting $meeting, User $recipient): bool
+    {
+        if (! $this->canReceive($recipient)) {
+            return false;
+        }
+
+        Notification::send($recipient, new MeetingReminderNotification($meeting));
+
+        return true;
+    }
+  
     /** @return Collection<int, User> */
     private function announcementRecipients(Announcement $announcement): Collection
     {
