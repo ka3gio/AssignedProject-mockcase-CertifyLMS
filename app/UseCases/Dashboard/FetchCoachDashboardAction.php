@@ -42,13 +42,14 @@ final class FetchCoachDashboardAction
         $coachingCertificationIds = $coach->coachingCertificationIds();
 
         $assignedEnrollments = Enrollment::query()
+            ->with(['user', 'certification'])
+            ->withMax(
+                ['learningSessions as last_activity_at'],
+                'started_at'
+            )
             ->whereIn('certification_id', $coachingCertificationIds)
             ->whereIn('status', [EnrollmentStatus::Learning, EnrollmentStatus::Passed])
             ->get();
-
-        foreach ($assignedEnrollments as $enrollment) {
-            $enrollment->last_activity_at = $enrollment->learningSessions()->max('started_at');
-        }
 
         $todayAndTomorrowMeetings = Meeting::query()
             ->where('coach_id', $coach->id)
