@@ -35,8 +35,7 @@ final class FetchCoachDashboardAction
 
     public function __construct(
         private readonly ChatUnreadCountService $chatUnread,
-    ) {
-    }
+    ) {}
 
     public function __invoke(User $coach): CoachDashboardViewModel
     {
@@ -63,10 +62,10 @@ final class FetchCoachDashboardAction
         return new CoachDashboardViewModel(
             assignedEnrollments: $assignedEnrollments,
             todayAndTomorrowMeetings: $todayAndTomorrowMeetings,
-            unreadChatCount: $this->safe(fn() => $this->chatUnread->roomCountForUser($coach)),
-            recentUnreadChatRooms: $this->safe(fn() => $this->fetchRecentUnreadChatRooms($coach)),
-            unansweredQaCount: $this->safe(fn() => $this->fetchUnansweredQaCount($coachingCertificationIds)),
-            recentQaThreads: $this->safe(fn() => $this->fetchRecentUnansweredQaThreads($coachingCertificationIds)),
+            unreadChatCount: $this->safe(fn () => $this->chatUnread->roomCountForUser($coach)),
+            recentUnreadChatRooms: $this->safe(fn () => $this->fetchRecentUnreadChatRooms($coach)),
+            unansweredQaCount: $this->safe(fn () => $this->fetchUnansweredQaCount($coachingCertificationIds)),
+            recentQaThreads: $this->safe(fn () => $this->fetchRecentUnansweredQaThreads($coachingCertificationIds)),
         );
     }
 
@@ -85,7 +84,7 @@ final class FetchCoachDashboardAction
             ->get();
 
         return $rooms
-            ->filter(fn(ChatRoom $room) => $this->chatUnread->messageCountInRoom($room, $coach) > 0)
+            ->filter(fn (ChatRoom $room) => $this->chatUnread->messageCountInRoom($room, $coach) > 0)
             ->take(5)
             ->values();
     }
@@ -96,7 +95,7 @@ final class FetchCoachDashboardAction
     private function fetchUnansweredQaCount(array $certificationIds): int
     {
         // 質問掲示板ルートが未登録の環境では集計しない（機能未提供時の防御、件数 0）
-        if (!Route::has('qa-board.index')) {
+        if (! Route::has('qa-board.index')) {
             return 0;
         }
 
@@ -117,7 +116,7 @@ final class FetchCoachDashboardAction
     private function fetchRecentUnansweredQaThreads(array $certificationIds): Collection
     {
         // 質問掲示板ルートが未登録の環境では空一覧を返す（機能未提供時の防御）
-        if (!Route::has('qa-board.index')) {
+        if (! Route::has('qa-board.index')) {
             return collect();
         }
 
