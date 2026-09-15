@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\BrowseController;
 use App\Http\Controllers\CertificationCatalogController;
@@ -103,6 +104,7 @@ Route::middleware('auth')->group(function () {
         ->name('enrollment-notes.destroy');
     // アプリ内通知（全ロール共通。MVP では admin 宛の通知自体は発火しない）
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
     Route::post('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])
         ->name('notifications.markAsRead');
     Route::post('notifications/read-all', [NotificationController::class, 'markAllAsRead'])
@@ -197,6 +199,11 @@ Route::middleware(['auth', 'role:student', 'active-learning'])
 // admin 専用ルート
 // ============================================================
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
+    // お知らせ配信・配信履歴（配信後の編集・削除・再配信は提供しない）
+    Route::resource('announcements', AnnouncementController::class)
+        ->only(['index', 'create', 'store', 'show'])
+        ->names('admin.announcements');
+
     // プランマスタ管理(CRUD + 公開状態遷移、admin のみ)
     Route::resource('plans', PlanController::class)
         ->parameters(['plans' => 'plan'])

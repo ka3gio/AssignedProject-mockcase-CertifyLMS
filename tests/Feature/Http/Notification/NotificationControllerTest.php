@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http\Notification;
 
+use App\Models\Announcement;
 use App\Models\User;
+use App\Notifications\Announcement\AdminAnnouncementNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -60,6 +63,40 @@ final class NotificationControllerTest extends TestCase
 
         $response->assertRedirect('/dashboard');
         $this->assertNotNull($notification->fresh()->read_at);
+    }
+
+    public function test_announcement_notification_click_opens_full_body(): void
+    {
+        Mail::fake();
+        $admin = User::factory()->admin()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $announcement = Announcement::factory()->for($admin, 'createdBy')->create([
+            'title' => '運営からのお知らせ',
+            'body' => '通知一覧より長いお知らせ本文です。',
+        ]);
+
+        $student->notify(new AdminAnnouncementNotification($announcement));
+        $notification = $student->notifications()->sole();
+
+        $this->actingAs($student)
+            ->post(route('notifications.markAsRead', $notification))
+            ->assertRedirect('/notifications/'.$notification->id);
+        $this->actingAs($student)
+            ->get('/notifications/'.$notification->id)
+            ->assertOk()
+            ->assertSee('通知一覧より長いお知らせ本文です。');
+        $this->assertNotNull($notification->fresh()->read_at);
+    }
+
+    public function test_user_cannot_view_another_users_notification_detail(): void
+    {
+        $user = User::factory()->student()->inProgress()->create();
+        $other = User::factory()->student()->inProgress()->create();
+        $notification = $this->createNotification($other, '他人宛');
+
+        $this->actingAs($user)
+            ->get('/notifications/'.$notification->id)
+            ->assertForbidden();
     }
 
     public function test_external_redirect_url_is_rejected(): void
