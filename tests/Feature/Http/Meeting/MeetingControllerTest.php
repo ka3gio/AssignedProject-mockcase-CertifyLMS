@@ -12,6 +12,7 @@ use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -280,11 +281,101 @@ class MeetingControllerTest extends TestCase
         $response->assertForbidden();
     }
 
-    public function test_store_blocks_double_booking_for_same_coach_and_slot(): void
+    public function test_database_blocks_multiple_active_meetings_for_same_coach_and_slot(): void
     {
-        // Arrange: 予約可能コンテキスト + 同コーチ・同時刻に canceled 面談を 1 件先在させる。
-        // canceled は候補抽出(予約済コーチ除外)をすり抜けるが、(coach_id, scheduled_at) UNIQUE は
-        // status を問わず効くため、並行を起こさず決定論的に二重予約の衝突を再現できる。
+        $students = User::factory()->student()->count(2)->create();
+        $coach = User::factory()->coach()->create();
+        $certification = Certification::factory()->published()->create();
+        $enrollments = $students->map(
+            fn (User $student) => Enrollment::factory()
+                ->for($student, 'user')
+                ->for($certification)
+                ->learning()
+                ->create()
+        );
+        $scheduledAt = now()->addDays(3)->startOfHour();
+
+        Meeting::factory()
+            ->reserved()
+            ->forCoach($coach)
+            ->forEnrollment($enrollments[0])
+            ->create(['scheduled_at' => $scheduledAt]);
+
+        $this->expectException(UniqueConstraintViolationException::class);
+
+        Meeting::factory()
+            ->reserved()
+            ->forCoach($coach)
+            ->forEnrollment($enrollments[1])
+            ->create(['scheduled_at' => $scheduledAt]);
+    }
+
+    public function test_database_allows_multiple_canceled_meetings_for_same_coach_and_slot(): void
+    {
+        $students = User::factory()->student()->count(2)->create();
+        $coach = User::factory()->coach()->create();
+        $certification = Certification::factory()->published()->create();
+        $enrollments = $students->map(
+            fn (User $student) => Enrollment::factory()
+                ->for($student, 'user')
+                ->for($certification)
+                ->learning()
+                ->create()
+        );
+        $scheduledAt = now()->addDays(3)->startOfHour();
+
+        foreach ($enrollments as $enrollment) {
+            Meeting::factory()
+                ->canceled()
+                ->forCoach($coach)
+                ->forEnrollment($enrollment)
+                ->create(['scheduled_at' => $scheduledAt]);
+        }
+
+        $this->assertSame(
+            2,
+            Meeting::query()
+                ->where('coach_id', $coach->id)
+                ->where('scheduled_at', $scheduledAt)
+                ->where('status', MeetingStatus::Canceled->value)
+                ->count(),
+        );
+    }
+
+    public function test_store_converts_unique_constraint_violation_to_conflict_without_consuming_quota(): void
+    {
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 3]);
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create([
+            'meeting_url' => 'https://meet.example.com/coach-room',
+        ]);
+        $certification = Certification::factory()->published()->create();
+        $this->attachCoach($certification, $coach, $admin);
+        CoachAvailability::factory()->forCoach($coach)->onDay(1)->timeRange('09:00:00', '18:00:00')->create();
+        $enrollment = Enrollment::factory()->for($student, 'user')->for($certification)->learning()->create();
+        $scheduledAt = now()->startOfDay()->next(Carbon::MONDAY)->setTime(10, 0);
+        $existingMeeting = Meeting::factory()->create();
+
+        // 並行予約で発生するものと同じ UNIQUE 制約違反を、主キー衝突で決定的に発生させる。
+        Meeting::creating(function (Meeting $meeting) use ($existingMeeting): void {
+            $meeting->id = $existingMeeting->id;
+        });
+
+        $response = $this->actingAs($student)->postJson(route('meetings.store', $enrollment), [
+            'scheduled_at' => $scheduledAt->format('Y-m-d\TH:i:s'),
+            'topic' => '相談したい',
+        ]);
+
+        $response->assertConflict();
+        $this->assertDatabaseCount('meetings', 1);
+        $this->assertDatabaseMissing('meeting_quota_transactions', [
+            'user_id' => $student->id,
+            'type' => MeetingQuotaTransactionType::Consumed->value,
+        ]);
+    }
+
+    public function test_store_allows_rebooking_same_coach_and_slot_after_cancellation(): void
+    {
         $student = User::factory()->student()->inProgress()->create(['max_meetings' => 3]);
         $otherStudent = User::factory()->student()->create();
         $admin = User::factory()->admin()->create();
@@ -295,13 +386,20 @@ class MeetingControllerTest extends TestCase
         $this->attachCoach($certification, $coach, $admin);
         CoachAvailability::factory()->forCoach($coach)->onDay(1)->timeRange('09:00:00', '18:00:00')->create();
         $enrollment = Enrollment::factory()->for($student, 'user')->for($certification)->learning()->create();
-        $scheduledAt = now()->startOfDay()->next(Carbon::MONDAY)->setTime(10, 0); // 次の月曜 10:00(未来)
+        $otherEnrollment = Enrollment::factory()->for($otherStudent, 'user')->for($certification)->learning()->create();
+        $scheduledAt = now()->startOfDay()->next(Carbon::MONDAY)->setTime(10, 0);
 
-        Meeting::factory()->canceled()->forCoach($coach)->forStudent($otherStudent)->create([
-            'scheduled_at' => $scheduledAt,
+        $previousMeeting = Meeting::factory()
+            ->reserved()
+            ->forCoach($coach)
+            ->forEnrollment($otherEnrollment)
+            ->create(['scheduled_at' => $scheduledAt]);
+        $previousMeeting->update([
+            'status' => MeetingStatus::Canceled->value,
+            'canceled_by_user_id' => $otherStudent->id,
+            'canceled_at' => now(),
         ]);
 
-        // Act
         $response = $this->actingAs($student)
             ->from(route('meetings.create', $enrollment))
             ->post(route('meetings.store', $enrollment), [
@@ -309,14 +407,19 @@ class MeetingControllerTest extends TestCase
                 'topic' => '相談したい',
             ]);
 
-        // Assert: 二重予約は成立せず、新規 reserved は作られない(canceled の 1 件のみが残る)
         $response->assertRedirect();
-        $response->assertSessionHas('error');
-        $this->assertSame(
-            0,
-            Meeting::query()->where('status', MeetingStatus::Reserved->value)->count(),
-            '同コーチ・同時刻の二重予約は (coach_id, scheduled_at) UNIQUE で阻止されるはず',
-        );
+        $response->assertSessionHas('success');
+        $response->assertSessionMissing('error');
+        $this->assertDatabaseHas('meetings', [
+            'coach_id' => $coach->id,
+            'student_id' => $student->id,
+            'scheduled_at' => $scheduledAt,
+            'status' => MeetingStatus::Reserved->value,
+        ]);
+        $this->assertSame(2, Meeting::query()
+            ->where('coach_id', $coach->id)
+            ->where('scheduled_at', $scheduledAt)
+            ->count());
     }
 
     public function test_cancel_refunds_meeting_quota(): void
