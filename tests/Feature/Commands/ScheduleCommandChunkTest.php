@@ -64,7 +64,7 @@ class ScheduleCommandChunkTest extends TestCase
         $student = User::factory()->student()->create();
         $enrollment = Enrollment::factory()->learning()->for($student, 'user')->create();
 
-        // UNIQUE(coach_id, scheduled_at) 回避のため、全件を別々の過去時刻(いずれも 60 分超過)に置く。
+        // 予約枠の UNIQUE 制約回避のため、全件を別々の過去時刻(いずれも 60 分超過)に置く。
         $base = now()->copy()->startOfHour()->subHours(2);
         for ($i = 0; $i < self::COUNT; $i++) {
             Meeting::factory()->reserved()
