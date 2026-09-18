@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -118,7 +119,7 @@ class User extends Authenticatable
             ->with('certification')
             ->whereHas(
                 'certification',
-                fn($query) => $query->published(),
+                fn ($query) => $query->published(),
             )
             ->orderBy('created_at');
     }
@@ -263,6 +264,14 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasOne<GoogleCalendarCredential, $this>
+     */
+    public function googleCredential(): HasOne
+    {
+        return $this->hasOne(GoogleCalendarCredential::class, 'coach_id');
+    }
+
+    /**
      * 参加している ChatRoom の中間テーブルレコード一覧。
      *
      * @return HasMany<ChatMember, $this>
@@ -309,7 +318,7 @@ class User extends Authenticatable
      */
     public function receivesBroadcastNotificationsOn(): string
     {
-        return 'notifications.' . $this->id;
+        return 'notifications.'.$this->id;
     }
 
     /**

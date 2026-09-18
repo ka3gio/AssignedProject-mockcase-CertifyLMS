@@ -141,5 +141,9 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 `.env.example` をコピーするだけで、すべての機能がローカルで動作します（メールは Mailpit に配信されます）。
 
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
+- `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` — Google Cloud Console で作成した Web アプリケーション用 OAuth クライアントの認証情報です
+- `GOOGLE_CALENDAR_REDIRECT_URI` — Google Cloud Console の「承認済みのリダイレクト URI」と完全一致させてください。ローカル既定値は `http://localhost:8000/settings/google-calendar/callback` です
+
+Google カレンダー連携では access token と refresh token を保存します。本チケットの開発用実装では平文保存ですが、本番運用ではアプリケーションレベルまたはデータベースレベルで必ず暗号化してください。Seeder が作成する `coach@certify-lms.test` の認証情報は連携状態 UI と解除動作の確認専用で、実際の Google API には使用できません。実連携を確認する場合は、Google Cloud Console でテストユーザーと OAuth クライアントを設定し、画面から連携し直してください。
 
 新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。

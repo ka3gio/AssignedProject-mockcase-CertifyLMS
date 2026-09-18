@@ -118,4 +118,17 @@ class MeetingTest extends TestCase
         // Assert
         $this->assertInstanceOf(Carbon::class, $fresh->scheduled_at);
     }
+
+    public function test_google_calendar_event_metadata_can_be_persisted(): void
+    {
+        $meeting = Meeting::factory()->reserved()->create([
+            'google_calendar_event_id' => 'google-event-123',
+            'google_calendar_id' => 'coach@example.com',
+        ]);
+
+        $fresh = $meeting->fresh();
+
+        $this->assertSame('google-event-123', $fresh->google_calendar_event_id);
+        $this->assertSame('coach@example.com', $fresh->google_calendar_id);
+    }
 }
