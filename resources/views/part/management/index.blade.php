@@ -1,8 +1,8 @@
 {{--
-    教材階層（Part 一覧）管理画面。資格配下の Part を並べて管理する。
-    構成: パンくず → ヘッダ（タイトル + 新規 Part ボタン）→ Part 一覧（0 件時は空状態カード）→ Part 新規作成モーダル
-    各 Part カード: order 番号 / タイトルリンク / 状態バッジ / 説明 / 子件数サマリ
-    フロント観点: 一覧はドラッグで並び替え（素の JS、data-reorder-*）。新規作成はモーダル内フォーム送信。
+教材階層（Part 一覧）管理画面。資格配下の Part を並べて管理する。
+構成: パンくず → ヘッダ（タイトル + 新規 Part ボタン）→ Part 一覧（0 件時は空状態カード）→ Part 新規作成モーダル
+各 Part カード: order 番号 / タイトルリンク / 状態バッジ / 説明 / 子件数サマリ
+フロント観点: 一覧はドラッグで並び替え（素の JS、data-reorder-*）。新規作成はモーダル内フォーム送信。
 --}}
 @extends('layouts.app')
 
@@ -10,17 +10,18 @@
 
 @section('content')
     <x-breadcrumb :items="[
-        ['label' => 'ダッシュボード', 'href' => route('dashboard.index')],
-        ['label' => '資格マスタ管理', 'href' => route('admin.certifications.index')],
-        ['label' => $certification->name, 'href' => route('admin.certifications.show', $certification)],
-        ['label' => '教材階層'],
-    ]" />
+            ['label' => 'ダッシュボード', 'href' => route('dashboard.index')],
+            ['label' => '資格マスタ管理', 'href' => route('admin.certifications.index')],
+            ['label' => $certification->name, 'href' => route('admin.certifications.show', $certification)],
+            ['label' => '教材階層'],
+        ]" />
 
     <div class="mt-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
             <h1 class="text-2xl font-bold text-ink-900">教材階層</h1>
             <p class="text-sm text-ink-500 mt-1">
-                <span class="font-semibold text-ink-700">{{ $certification->name }}</span> の Part / Chapter / Section を管理します。
+                <span class="font-semibold text-ink-700">{{ $certification->name }}</span> の Part / Chapter / Section
+                を管理します。
             </p>
         </div>
         <x-button variant="primary" data-modal-trigger="part-create-modal">
@@ -32,15 +33,12 @@
     @if ($parts->isEmpty())
         <div class="mt-6">
             <x-card padding="none">
-                <x-empty-state
-                    icon="book-open"
-                    title="まだ Part がありません"
-                    description="「新規 Part」ボタンから最初の Part を追加してください。"
-                />
+                <x-empty-state icon="book-open" title="まだ Part がありません" description="「新規 Part」ボタンから最初の Part を追加してください。" />
             </x-card>
         </div>
     @else
-        <div class="mt-6 space-y-4" id="parts-list" data-reorder-endpoint="{{ route('admin.certifications.parts.reorder', $certification) }}">
+        <div class="mt-6 space-y-4" id="parts-list"
+            data-reorder-endpoint="{{ route('admin.certifications.parts.reorder', $certification) }}">
             @foreach ($parts as $part)
                 <x-card padding="md" data-reorder-id="{{ $part->id }}">
                     <div class="flex items-start justify-between gap-4">
@@ -48,7 +46,7 @@
                             <div class="flex items-center gap-3 flex-wrap">
                                 <span class="text-xs font-mono text-ink-500 tabular-nums">#{{ $part->order }}</span>
                                 <a href="{{ route('admin.parts.show', $part) }}"
-                                   class="text-lg font-semibold text-ink-900 hover:text-primary-700 transition-colors">
+                                    class="text-lg font-semibold text-ink-900 hover:text-primary-700 transition-colors">
                                     {{ $part->title }}
                                 </a>
                                 <x-content-management.status-pill :status="$part->status" />
@@ -74,26 +72,13 @@
 
     <x-modal id="part-create-modal" title="Part を新規作成" size="md">
         <x-slot:body>
-            <form novalidate id="part-create-form" method="POST" action="{{ route('admin.certifications.parts.store', $certification) }}" class="space-y-4">
+            <form novalidate id="part-create-form" method="POST"
+                action="{{ route('admin.certifications.parts.store', $certification) }}" class="space-y-4">
                 @csrf
-                <x-form.input
-                    name="title"
-                    label="タイトル"
-                    :value="old('title')"
-                    :error="$errors->first('title')"
-                    :required="true"
-                    placeholder="例: 第1部 基礎理論"
-                    maxlength="200"
-                />
-                <x-form.textarea
-                    name="description"
-                    label="説明"
-                    :rows="3"
-                    :value="old('description')"
-                    :error="$errors->first('description')"
-                    :maxlength="1000"
-                    placeholder="任意"
-                />
+                <x-form.input name="title" label="タイトル" :value="old('title')" :error="$errors->first('title')"
+                    :required="true" placeholder="例: 第1部 基礎理論" maxlength="200" />
+                <x-form.textarea name="description" label="説明" :rows="3" :value="old('description')"
+                    :error="$errors->first('description')" :maxlength="1000" placeholder="任意" />
             </form>
         </x-slot:body>
         <x-slot:footer>
@@ -102,3 +87,8 @@
         </x-slot:footer>
     </x-modal>
 @endsection
+
+
+@push('scripts')
+    @vite('resources/js/content-management/reorder.js')
+@endpush

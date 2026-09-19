@@ -23,6 +23,10 @@ final class IndexAction
     {
         return Enrollment::query()
             ->forUser($student)
+            ->whereHas(
+                'certification',
+                fn($query) => $query->published(),
+            )
             ->with([
                 'certification.category',
                 'certification.coaches',

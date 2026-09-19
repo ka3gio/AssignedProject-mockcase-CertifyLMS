@@ -80,7 +80,21 @@ sail npm run build
 
 Blade / CSS / JS を編集しながら開発する場合は、`build` の代わりに `sail npm run dev` を起動したままにしてください（Vite のホットリロードが効きます）。
 
-### 8. 動作確認
+### 8. キューワーカーの起動
+
+通知・メールはデータベースキューで非同期送信します。別のターミナルで次のコマンドを起動したままにしてください。
+
+```bash
+sail artisan queue:work database --queue=default,database --tries=4 --timeout=60 --sleep=3
+```
+
+アプリケーションコードを更新したときは、実行中のworkerへ安全な再起動を指示します。
+
+```bash
+sail artisan queue:restart
+```
+
+### 9. 動作確認
 
 http://localhost:8000 にアクセスし、下記の[ログインアカウント](#ログインアカウント)でログインできればセットアップ完了です。
 
@@ -114,7 +128,21 @@ http://localhost:8000 にアクセスし、下記の[ログインアカウント
 ```bash
 sail artisan test                  # 全テスト実行
 sail artisan test --filter=Xxx    # クラス名・メソッド名で絞り込み
+sail composer test:external-api   # Google / Gemini / Stripe のモックテストのみ
+sail composer test:without-external-api # 外部 API モックテストを除外
 ```
+
+## キューの失敗確認・再投入
+
+通知・メールのジョブは、初回実行に失敗すると60秒、5分、15分の待機を挟んで最大3回再試行します。すべて失敗したジョブは `failed_jobs` テーブルへ記録されます。
+
+```bash
+sail artisan queue:failed          # 失敗ジョブを一覧表示
+sail artisan queue:retry <UUID>    # 指定した失敗ジョブを再投入
+sail artisan queue:retry all       # すべての失敗ジョブを再投入
+```
+
+原因を解消してから再投入してください。再投入後の処理にも、起動中のキューワーカーが必要です。
 
 ## コード整形
 
@@ -141,5 +169,15 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 `.env.example` をコピーするだけで、すべての機能がローカルで動作します（メールは Mailpit に配信されます）。
 
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
+- `AI_CHAT_ENABLED` — AI 相談機能全体の有効・無効を切り替えます。`true` で有効、`false` で無効です
+- `GEMINI_API_KEY` — AI 相談で Gemini API を利用するための API キーです
+- `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` — Google Cloud Console で作成した Web アプリケーション用 OAuth クライアントの認証情報です
+- `GOOGLE_CALENDAR_REDIRECT_URI` — Google Cloud Console の「承認済みのリダイレクト URI」と完全一致させてください。ローカル既定値は `http://localhost:8000/settings/google-calendar/callback` です
+- `STRIPE_SECRET` — Stripe のテストモード用シークレットキー（`sk_test_...`）です
+- `STRIPE_WEBHOOK_SECRET` — Stripe CLI または Stripe ダッシュボードで発行される Webhook 署名シークレット（`whsec_...`）です
+- `QUEUE_CONNECTION=database` — 通知・メールを `jobs` テーブルへ投入します。実送信には上記のキューワーカーを起動してください
+- `QUEUE_FAILED_DRIVER=database-uuids` — リトライ上限を超えたジョブを `failed_jobs` テーブルへ記録します
+
+Google カレンダー連携では access token と refresh token を保存します。本チケットの開発用実装では平文保存ですが、本番運用ではアプリケーションレベルまたはデータベースレベルで必ず暗号化してください。Seeder が作成する `coach@certify-lms.test` の認証情報は連携状態 UI と解除動作の確認専用で、実際の Google API には使用できません。実連携を確認する場合は、Google Cloud Console でテストユーザーと OAuth クライアントを設定し、画面から連携し直してください。
 
 新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。

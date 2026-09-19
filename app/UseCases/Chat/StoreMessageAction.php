@@ -9,6 +9,7 @@ use App\Models\ChatMember;
 use App\Models\ChatMessage;
 use App\Models\ChatRoom;
 use App\Models\User;
+use App\Services\BusinessNotificationService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,6 +22,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class StoreMessageAction
 {
+    public function __construct(private readonly BusinessNotificationService $notifications) {}
+
     /**
      * @param array{body: string} $validated
      */
@@ -40,6 +43,7 @@ final class StoreMessageAction
 
             DB::afterCommit(function () use ($message): void {
                 broadcast(new ChatMessageSent($message->load('sender')))->toOthers();
+                $this->notifications->notifyChatMessageReceived($message);
             });
 
             return $message;

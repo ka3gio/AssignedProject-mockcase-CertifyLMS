@@ -42,6 +42,11 @@ class IssueActionTest extends TestCase
         $this->assertSame($enrollment->id, $certificate->enrollment_id);
         $this->assertSame($enrollment->certification_id, $certificate->certification_id);
         $this->assertDatabaseHas('certificates', ['id' => $certificate->id]);
+        Storage::disk('private')->assertExists($certificate->pdf_path);
+        $this->assertStringStartsWith(
+            '%PDF-',
+            Storage::disk('private')->get($certificate->pdf_path),
+        );
     }
 
     public function test_throws_when_enrollment_not_passed(): void

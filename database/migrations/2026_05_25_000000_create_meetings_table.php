@@ -13,8 +13,10 @@ use Illuminate\Support\Facades\Schema;
  * `status=reserved` で即時確定する(コーチによる承認フローはない)。
  * scheduled_at は開始時刻のみ保持し、終了時刻は常に `scheduled_at + 60 分` とする運用(NFR で 60 分固定)。
  *
- * (coach_id, scheduled_at) UNIQUE で同コーチ × 同時刻の二重予約を DB レベルで禁止し、
- * Action 内の race condition は INSERT 失敗を `MeetingNoAvailableCoachException` に変換することで吸収する。
+ * (coach_id, scheduled_at, occupies_slot) UNIQUE で予約枠を占有中の面談だけを対象に
+ * 同コーチ × 同時刻の二重予約を DB レベルで禁止する。キャンセル済みは occupies_slot=NULL となるため、
+ * 同一枠の履歴を複数保持できる。Action 内の race condition は INSERT 失敗を
+ * `MeetingNoAvailableCoachException` に変換することで吸収する。
  */
 return new class extends Migration
 {
@@ -27,6 +29,9 @@ return new class extends Migration
             $table->foreignUlid('student_id')->constrained('users')->restrictOnDelete();
             $table->dateTime('scheduled_at');
             $table->string('status', 20);
+            $table->boolean('occupies_slot')
+                ->nullable()
+                ->storedAs("CASE WHEN status = 'canceled' THEN NULL ELSE 1 END");
             $table->text('topic');
             $table->foreignUlid('canceled_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->dateTime('canceled_at')->nullable();
@@ -37,6 +42,11 @@ return new class extends Migration
                 ->constrained('meeting_quota_transactions')
                 ->nullOnDelete();
             $table->timestamps();
+
+            $table->unique(
+                ['coach_id', 'scheduled_at', 'occupies_slot'],
+                'meetings_coach_slot_unique',
+            );
 
             // 受講生別履歴一覧 / 自動完了 Schedule Command 高速化のための補助 INDEX
             $table->index(['student_id', 'scheduled_at']);

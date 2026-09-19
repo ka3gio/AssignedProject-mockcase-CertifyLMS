@@ -7,16 +7,26 @@ namespace App\Mail;
 use App\Models\Invitation;
 use App\Services\InvitationTokenService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class InvitationMail extends Mailable
+class InvitationMail extends Mailable implements ShouldQueueAfterCommit
 {
     use Queueable, SerializesModels;
 
+    /** 初回実行と、段階的な待機を挟む3回の再試行。 */
+    public int $tries = 4;
+
     public function __construct(public Invitation $invitation) {}
+
+    /** @return array<int, int> */
+    public function backoff(): array
+    {
+        return [60, 300, 900];
+    }
 
     public function envelope(): Envelope
     {

@@ -7,15 +7,21 @@ namespace Tests\Unit\Services;
 use App\Exceptions\Mentoring\MeetingOutOfAvailabilityException;
 use App\Models\Certification;
 use App\Models\CoachAvailability;
+use App\Models\GoogleCalendarCredential;
 use App\Models\Meeting;
 use App\Models\User;
+use App\Services\Contracts\GoogleCalendarGateway;
 use App\Services\MeetingAvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
-use Tests\TestCase;
+use Mockery;
+use PHPUnit\Framework\Attributes\Group;
+use RuntimeException;
+use Tests\ExternalApiTestCase;
 
-class MeetingAvailabilityServiceTest extends TestCase
+#[Group('external-api')]
+class MeetingAvailabilityServiceTest extends ExternalApiTestCase
 {
     use RefreshDatabase;
 
@@ -121,5 +127,49 @@ class MeetingAvailabilityServiceTest extends TestCase
         // 例外が起きないことを確認
         app(MeetingAvailabilityService::class)->validateSlot($certification, Carbon::parse('2026-06-01 09:00:00'));
         $this->addToAssertionCount(1);
+    }
+
+    public function test_excludes_a_slot_that_overlaps_a_google_calendar_busy_period(): void
+    {
+        $certification = Certification::factory()->published()->create();
+        $coach = User::factory()->coach()->create();
+        $this->attachCoach($certification, $coach);
+        $credential = GoogleCalendarCredential::factory()->for($coach, 'coach')->create();
+        CoachAvailability::factory()->forCoach($coach)->onDay(1)->timeRange('09:00:00', '11:00:00')->create();
+        $gateway = Mockery::mock(GoogleCalendarGateway::class);
+        $gateway->shouldReceive('busyPeriods')->once()->withArgs(
+            fn ($actualCredential): bool => $actualCredential->is($credential),
+        )->andReturn([[
+            'start' => Carbon::parse('2026-06-01 09:30:00'),
+            'end' => Carbon::parse('2026-06-01 10:00:00'),
+        ]]);
+        $this->app->instance(GoogleCalendarGateway::class, $gateway);
+
+        $slots = app(MeetingAvailabilityService::class)->slotsForCertification(
+            $certification,
+            Carbon::parse('2026-06-01'),
+        );
+
+        $this->assertSame(['10:00'], $slots->pluck('slot_start')->map->format('H:i')->all());
+    }
+
+    public function test_google_calendar_failure_falls_back_to_lms_availability(): void
+    {
+        $certification = Certification::factory()->published()->create();
+        $coach = User::factory()->coach()->create();
+        $this->attachCoach($certification, $coach);
+        GoogleCalendarCredential::factory()->for($coach, 'coach')->create();
+        CoachAvailability::factory()->forCoach($coach)->onDay(1)->timeRange('09:00:00', '10:00:00')->create();
+        $gateway = Mockery::mock(GoogleCalendarGateway::class);
+        $gateway->shouldReceive('busyPeriods')->once()->andThrow(new RuntimeException('refresh failed'));
+        $this->app->instance(GoogleCalendarGateway::class, $gateway);
+
+        $slots = app(MeetingAvailabilityService::class)->slotsForCertification(
+            $certification,
+            Carbon::parse('2026-06-01'),
+        );
+
+        $this->assertCount(1, $slots);
+        $this->assertSame('09:00', $slots->first()['slot_start']->format('H:i'));
     }
 }

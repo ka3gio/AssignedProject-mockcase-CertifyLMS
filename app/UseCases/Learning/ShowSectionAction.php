@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\UseCases\Learning;
 
 use App\Enums\ContentStatus;
+use App\Enums\CertificationStatus;
 use App\Models\Section;
 use App\Models\SectionProgress;
 use App\Models\User;
@@ -23,7 +24,8 @@ final class ShowSectionAction
     public function __construct(
         private readonly MarkdownRenderingService $markdown,
         private readonly SectionQuestionScoreService $scoreService,
-    ) {}
+    ) {
+    }
 
     /**
      * @return array<string, mixed>
@@ -34,9 +36,12 @@ final class ShowSectionAction
         $chapter = $section->chapter;
         $part = $chapter?->part;
 
-        if ($section->status !== ContentStatus::Published
+        if (
+            $section->status !== ContentStatus::Published
             || $chapter === null || $chapter->status !== ContentStatus::Published
-            || $part === null || $part->status !== ContentStatus::Published) {
+            || $part === null || $part->status !== ContentStatus::Published
+            || $part->certification === null || $part->certification->status !== CertificationStatus::Published
+        ) {
             throw new NotFoundHttpException;
         }
 
@@ -45,7 +50,7 @@ final class ShowSectionAction
             ->ordered()
             ->get();
 
-        $currentIndex = $siblingSections->search(fn ($s) => $s->id === $section->id);
+        $currentIndex = $siblingSections->search(fn($s) => $s->id === $section->id);
         $prevSection = $currentIndex !== false && $currentIndex > 0
             ? $siblingSections->get($currentIndex - 1)
             : null;

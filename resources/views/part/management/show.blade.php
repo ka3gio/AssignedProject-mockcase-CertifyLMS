@@ -1,7 +1,8 @@
 {{--
-    Part 詳細・編集画面。Part 情報の編集と配下 Chapter の管理を行う。
-    構成: パンくず → ヘッダ（タイトル + 状態バッジ + 公開/削除 or 下書きに戻すボタン）→ Part 情報編集フォーム → Chapter 一覧（0 件時は空状態カード）→ Chapter 新規作成モーダル + 状態遷移確認モーダル群
-    フロント観点: Chapter 一覧はドラッグで並び替え（素の JS、data-reorder-*）。新規作成・公開・削除・下書き化はモーダル経由。下書き/公開でヘッダのボタンを出し分け。
+Part 詳細・編集画面。Part 情報の編集と配下 Chapter の管理を行う。
+構成: パンくず → ヘッダ（タイトル + 状態バッジ + 公開/削除 or 下書きに戻すボタン）→ Part 情報編集フォーム → Chapter 一覧（0 件時は空状態カード）→ Chapter 新規作成モーダル +
+状態遷移確認モーダル群
+フロント観点: Chapter 一覧はドラッグで並び替え（素の JS、data-reorder-*）。新規作成・公開・削除・下書き化はモーダル経由。下書き/公開でヘッダのボタンを出し分け。
 --}}
 @extends('layouts.app')
 
@@ -14,12 +15,12 @@
 
 @section('content')
     <x-breadcrumb :items="[
-        ['label' => 'ダッシュボード', 'href' => route('dashboard.index')],
-        ['label' => '資格マスタ管理', 'href' => route('admin.certifications.index')],
-        ['label' => $part->certification->name, 'href' => route('admin.certifications.show', $part->certification)],
-        ['label' => '教材階層', 'href' => route('admin.certifications.parts.index', $part->certification)],
-        ['label' => $part->title],
-    ]" />
+            ['label' => 'ダッシュボード', 'href' => route('dashboard.index')],
+            ['label' => '資格マスタ管理', 'href' => route('admin.certifications.index')],
+            ['label' => $part->certification->name, 'href' => route('admin.certifications.show', $part->certification)],
+            ['label' => '教材階層', 'href' => route('admin.certifications.parts.index', $part->certification)],
+            ['label' => $part->title],
+        ]" />
 
     <div class="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0">
@@ -53,22 +54,10 @@
         <form novalidate method="POST" action="{{ route('admin.parts.update', $part) }}" class="mt-4 space-y-4">
             @csrf
             @method('PATCH')
-            <x-form.input
-                name="title"
-                label="タイトル"
-                :value="old('title', $part->title)"
-                :error="$errors->first('title')"
-                :required="true"
-                maxlength="200"
-            />
-            <x-form.textarea
-                name="description"
-                label="説明"
-                :rows="3"
-                :value="old('description', $part->description)"
-                :error="$errors->first('description')"
-                :maxlength="1000"
-            />
+            <x-form.input name="title" label="タイトル" :value="old('title', $part->title)" :error="$errors->first('title')"
+                :required="true" maxlength="200" />
+            <x-form.textarea name="description" label="説明" :rows="3" :value="old('description', $part->description)"
+                :error="$errors->first('description')" :maxlength="1000" />
             <div class="flex justify-end">
                 <x-button type="submit" variant="primary">保存</x-button>
             </div>
@@ -86,15 +75,12 @@
     @if ($part->chapters->isEmpty())
         <div class="mt-4">
             <x-card padding="none">
-                <x-empty-state
-                    icon="document-text"
-                    title="まだ Chapter がありません"
-                    description="「新規 Chapter」から作成してください。"
-                />
+                <x-empty-state icon="document-text" title="まだ Chapter がありません" description="「新規 Chapter」から作成してください。" />
             </x-card>
         </div>
     @else
-        <div class="mt-4 space-y-3" id="chapters-list" data-reorder-endpoint="{{ route('admin.parts.chapters.reorder', $part) }}">
+        <div class="mt-4 space-y-3" id="chapters-list"
+            data-reorder-endpoint="{{ route('admin.parts.chapters.reorder', $part) }}">
             @foreach ($part->chapters as $chapter)
                 <x-card padding="md" data-reorder-id="{{ $chapter->id }}">
                     <div class="flex items-center justify-between gap-4">
@@ -102,7 +88,7 @@
                             <div class="flex items-center gap-3 flex-wrap">
                                 <span class="text-xs font-mono text-ink-500 tabular-nums">#{{ $chapter->order }}</span>
                                 <a href="{{ route('admin.chapters.show', $chapter) }}"
-                                   class="text-base font-semibold text-ink-900 hover:text-primary-700 transition-colors">
+                                    class="text-base font-semibold text-ink-900 hover:text-primary-700 transition-colors">
                                     {{ $chapter->title }}
                                 </a>
                                 <x-content-management.status-pill :status="$chapter->status" />
@@ -123,25 +109,13 @@
 
     <x-modal id="chapter-create-modal" title="Chapter を新規作成" size="md">
         <x-slot:body>
-            <form novalidate id="chapter-create-form" method="POST" action="{{ route('admin.parts.chapters.store', $part) }}" class="space-y-4">
+            <form novalidate id="chapter-create-form" method="POST"
+                action="{{ route('admin.parts.chapters.store', $part) }}" class="space-y-4">
                 @csrf
-                <x-form.input
-                    name="title"
-                    label="タイトル"
-                    :value="old('title')"
-                    :error="$errors->first('title')"
-                    :required="true"
-                    maxlength="200"
-                    placeholder="例: 第1章 進数と論理演算"
-                />
-                <x-form.textarea
-                    name="description"
-                    label="説明"
-                    :rows="3"
-                    :value="old('description')"
-                    :error="$errors->first('description')"
-                    :maxlength="1000"
-                />
+                <x-form.input name="title" label="タイトル" :value="old('title')" :error="$errors->first('title')"
+                    :required="true" maxlength="200" placeholder="例: 第1章 進数と論理演算" />
+                <x-form.textarea name="description" label="説明" :rows="3" :value="old('description')"
+                    :error="$errors->first('description')" :maxlength="1000" />
             </form>
         </x-slot:body>
         <x-slot:footer>
@@ -151,29 +125,18 @@
     </x-modal>
 
     @if ($isDraft)
-        <x-content-management.publish-confirm-modal
-            id="part-publish-modal"
-            title="Part を公開しますか？"
-            description="公開すると配下の Chapter / Section も受講生の閲覧対象になります（各子要素も公開状態である必要があります）。"
-            :action="route('admin.parts.publish', $part)"
-            button-label="公開する"
-            button-variant="primary"
-        />
-        <x-content-management.delete-confirm-modal
-            id="part-delete-modal"
-            title="Part を削除しますか？"
-            description="Part を削除します。配下の Chapter / Section も一緒に削除されます。"
-            :action="route('admin.parts.destroy', $part)"
-            button-label="削除する"
-        />
+        <x-content-management.publish-confirm-modal id="part-publish-modal" title="Part を公開しますか？"
+            description="公開すると配下の Chapter / Section も受講生の閲覧対象になります（各子要素も公開状態である必要があります）。" :action="route('admin.parts.publish', $part)" button-label="公開する" button-variant="primary" />
+        <x-content-management.delete-confirm-modal id="part-delete-modal" title="Part を削除しますか？"
+            description="Part を削除します。配下の Chapter / Section も一緒に削除されます。" :action="route('admin.parts.destroy', $part)"
+            button-label="削除する" />
     @else
-        <x-content-management.publish-confirm-modal
-            id="part-unpublish-modal"
-            title="Part を下書きに戻しますか？"
-            description="下書きに戻すと受講生からは非表示になります。"
-            :action="route('admin.parts.unpublish', $part)"
-            button-label="下書きに戻す"
-            button-variant="secondary"
-        />
+        <x-content-management.publish-confirm-modal id="part-unpublish-modal" title="Part を下書きに戻しますか？"
+            description="下書きに戻すと受講生からは非表示になります。" :action="route('admin.parts.unpublish', $part)" button-label="下書きに戻す"
+            button-variant="secondary" />
     @endif
 @endsection
+
+@push('scripts')
+    @vite('resources/js/content-management/reorder.js')
+@endpush

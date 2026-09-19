@@ -12,6 +12,8 @@ use App\Enums\UserStatus;
 use App\Models\Certificate;
 use App\Models\Certification;
 use App\Models\Enrollment;
+use App\Models\EnrollmentNote;
+use App\Models\EnrollmentGoal;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -152,6 +154,12 @@ final class EnrollmentSeeder extends Seeder
                     'changed_reason' => '新規登録',
                 ],
             );
+
+            $this->seedNotes($enrollment, $admin, $index);
+
+            if ($index === 0) {
+                $this->seedFixedStudentGoals($enrollment);
+            }
         }
     }
 
@@ -201,11 +209,61 @@ final class EnrollmentSeeder extends Seeder
             ]);
 
             $this->seedStatusLogs($enrollment, $pattern['state'], $student);
+            $this->seedNotes($enrollment, $admin, $i);
+            $this->seedDemoGoal($enrollment, $i);
 
             if ($pattern['state'] === 'passed') {
                 $this->issueCertificate($enrollment, $passedAt);
             }
         }
+    }
+
+    /**
+     * 固定受講生の先頭 Enrollment に、達成済・未達成の確認用目標を投入する。
+     */
+    private function seedFixedStudentGoals(Enrollment $enrollment): void
+    {
+        EnrollmentGoal::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'title' => '過去問5年分を解き終える',
+            ],
+            [
+                'description' => '間違えた問題は解説を読み、翌日に解き直す。',
+                'target_date' => now()->addMonth()->toDateString(),
+                'achieved_at' => null,
+            ],
+        );
+
+        EnrollmentGoal::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'title' => '基礎教材を一周する',
+            ],
+            [
+                'description' => '全Sectionを読み、章末問題まで完了する。',
+                'target_date' => now()->subWeek()->toDateString(),
+                'achieved_at' => now()->subDays(3),
+            ],
+        );
+    }
+
+    /**
+     * demo 受講生の Enrollment に、認可確認用の個人目標を散らす。
+     */
+    private function seedDemoGoal(Enrollment $enrollment, int $index): void
+    {
+        EnrollmentGoal::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'title' => '今月の学習計画を完了する',
+            ],
+            [
+                'description' => $index % 2 === 0 ? '平日は毎日30分以上学習する。' : null,
+                'target_date' => now()->addDays(14 + $index)->toDateString(),
+                'achieved_at' => $index % 3 === 0 ? now()->subDay() : null,
+            ],
+        );
     }
 
     private function seedStatusLogs(Enrollment $enrollment, string $finalState, User $student): void
@@ -236,6 +294,40 @@ final class EnrollmentSeeder extends Seeder
                 'changed_at' => now()->subDay(),
                 'changed_reason' => '試験日超過による自動失敗',
             ]);
+        }
+    }
+
+    /**
+     * 担当コーチと管理者のメモを混在させ、作成者別の操作表示を確認できる状態にする。
+     */
+    private function seedNotes(Enrollment $enrollment, ?User $admin, int $index): void
+    {
+        $coaches = $enrollment->certification->coaches()->get();
+
+        foreach ($coaches as $coachIndex => $coach) {
+            EnrollmentNote::factory()
+                ->forEnrollment($enrollment)
+                ->authoredBy($coach)
+                ->create([
+                    'body' => match (($index + $coachIndex) % 3) {
+                        0 => "最近、チャットへの返信が少し遅れています。\n次回面談で学習時間を確認します。",
+                        1 => 'Q&Aでデータベース設計の論点に躓いていたため、復習状況をフォローします。',
+                        default => '模試の得点は安定しています。苦手分野の反復状況を継続して確認します。',
+                    },
+                    'created_at' => now()->subDays(7 - min($index + $coachIndex, 6)),
+                    'updated_at' => now()->subDays(7 - min($index + $coachIndex, 6)),
+                ]);
+        }
+
+        if ($admin !== null && $index % 2 === 0) {
+            EnrollmentNote::factory()
+                ->forEnrollment($enrollment)
+                ->authoredBy($admin)
+                ->create([
+                    'body' => '運営確認: 次回フォロー時に学習計画の更新状況を確認してください。',
+                    'created_at' => now()->subDays(2),
+                    'updated_at' => now()->subDays(2),
+                ]);
         }
     }
 

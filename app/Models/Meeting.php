@@ -38,6 +38,8 @@ class Meeting extends Model
         'canceled_by_user_id',
         'canceled_at',
         'meeting_url_snapshot',
+        'google_calendar_event_id',
+        'google_calendar_id',
         'completed_at',
         'meeting_quota_transaction_id',
     ];

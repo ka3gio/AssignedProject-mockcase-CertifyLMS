@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -105,6 +106,14 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasMany<AiChatConversation, $this>
+     */
+    public function aiChatConversations(): HasMany
+    {
+        return $this->hasMany(AiChatConversation::class);
+    }
+
+    /**
      * 資格スイッチャー(<x-enrollment-switcher>)に表示する受講中(learning + passed)の受講登録。
      * 資格名表示のため certification を eager load し登録順に並べる。リレーションとして定義することで、
      * 1 リクエスト内でサイドバーとインラインに複数描画されても結果がキャッシュされ再クエリされない。
@@ -116,6 +125,10 @@ class User extends Authenticatable
         return $this->enrollments()
             ->whereIn('status', [EnrollmentStatus::Learning->value, EnrollmentStatus::Passed->value])
             ->with('certification')
+            ->whereHas(
+                'certification',
+                fn ($query) => $query->published(),
+            )
             ->orderBy('created_at');
     }
 
@@ -259,6 +272,14 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasOne<GoogleCalendarCredential, $this>
+     */
+    public function googleCredential(): HasOne
+    {
+        return $this->hasOne(GoogleCalendarCredential::class, 'coach_id');
+    }
+
+    /**
      * 参加している ChatRoom の中間テーブルレコード一覧。
      *
      * @return HasMany<ChatMember, $this>
@@ -276,6 +297,16 @@ class User extends Authenticatable
     public function sentChatMessages(): HasMany
     {
         return $this->hasMany(ChatMessage::class, 'sender_user_id');
+    }
+
+    /**
+     * 自身が作成した受講登録メモ一覧。
+     *
+     * @return HasMany<EnrollmentNote, $this>
+     */
+    public function authoredEnrollmentNotes(): HasMany
+    {
+        return $this->hasMany(EnrollmentNote::class, 'author_user_id');
     }
 
     /**

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Services\Contracts\GoogleCalendarGateway;
+use App\Services\GoogleCalendarApiGateway;
 use App\View\Composers\EnrollmentSwitcherComposer;
 use App\View\Composers\NotificationBadgeComposer;
 use App\View\Composers\SectionPageMetaComposer;
@@ -15,7 +17,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->bind(GoogleCalendarGateway::class, GoogleCalendarApiGateway::class);
     }
 
     public function boot(): void

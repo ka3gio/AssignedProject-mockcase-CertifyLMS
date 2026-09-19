@@ -14,6 +14,7 @@ use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
+use App\UseCases\Certificate\GeneratePdfAction;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -45,6 +46,7 @@ final class CertificateSeeder extends Seeder
 
         if ($graduatedStudents->isEmpty()) {
             $this->command?->info('CertificateSeeder: graduated 受講生が存在しないため補完なし。');
+            $this->generatePdfFiles();
 
             return;
         }
@@ -56,6 +58,7 @@ final class CertificateSeeder extends Seeder
 
         if ($publishedCertifications->isEmpty()) {
             $this->command?->warn('CertificateSeeder: 公開済資格がありません。先に CertificationSeeder を実行してください。');
+            $this->generatePdfFiles();
 
             return;
         }
@@ -69,6 +72,8 @@ final class CertificateSeeder extends Seeder
             $enrollment = $this->createPastEnrollment($student, $certification, $i);
             $this->issueCertificateForEnrollment($enrollment);
         }
+
+        $this->generatePdfFiles();
     }
 
     /**
@@ -121,12 +126,24 @@ final class CertificateSeeder extends Seeder
     {
         $issuedAt = $enrollment->passed_at ?? now();
 
-        $certificate = Certificate::factory()
+        Certificate::factory()
             ->forEnrollment($enrollment)
             ->state([
                 'pdf_path' => 'certificates/'.Str::ulid().'.pdf',
                 'issued_at' => $issuedAt,
             ])
             ->create();
+    }
+
+    /**
+     * 先行 Seeder が作成した分を含む全修了証の PDF 実体を生成する。
+     */
+    private function generatePdfFiles(): void
+    {
+        $generatePdf = app(GeneratePdfAction::class);
+
+        Certificate::query()
+            ->with(['user', 'certification'])
+            ->each(fn (Certificate $certificate) => $generatePdf($certificate));
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\EnrollmentStatus;
+use App\Enums\CertificationStatus;
 use App\Models\Enrollment;
 use App\Models\User;
 
@@ -55,6 +56,10 @@ final class DefaultEnrollmentService
         $remaining = Enrollment::query()
             ->where('user_id', $user->id)
             ->whereIn('status', [EnrollmentStatus::Learning->value, EnrollmentStatus::Passed->value])
+            ->whereHas(
+                'certification',
+                fn($query) => $query->published(),
+            )
             ->where('id', '!=', $changedEnrollment->id)
             ->get();
 
@@ -75,11 +80,15 @@ final class DefaultEnrollmentService
 
         $default = Enrollment::query()
             ->withTrashed()
+            ->with('certification')
             ->find($user->default_enrollment_id);
 
         $invalid = $default === null
             || $default->trashed()
-            || $default->status === EnrollmentStatus::Failed;
+            || $default->status === EnrollmentStatus::Failed
+            || $default->certification === null
+            || $default->certification->status !== CertificationStatus::Published;
+
 
         if ($invalid) {
             $user->update(['default_enrollment_id' => null]);

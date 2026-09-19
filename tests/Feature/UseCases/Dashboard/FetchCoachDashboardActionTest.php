@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Services\ChatUnreadCountService;
 use App\UseCases\Dashboard\FetchCoachDashboardAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Mockery;
 use Tests\TestCase;
@@ -44,18 +46,42 @@ class FetchCoachDashboardActionTest extends TestCase
         $cert = Certification::factory()->published()->create();
         $this->attachCoach($cert, $coach);
         $enrollment = Enrollment::factory()->for($cert)->learning()->create();
+        $olderStartedAt = now()->subDays(2)->startOfSecond();
+        $latestStartedAt = now()->subDay()->startOfSecond();
 
         LearningSession::factory()
             ->forEnrollment($enrollment)
             ->forUser($enrollment->user)
             ->closed()
-            ->startedOn(now()->subDay())
+            ->startedOn($olderStartedAt)
+            ->create();
+        LearningSession::factory()
+            ->forEnrollment($enrollment)
+            ->forUser($enrollment->user)
+            ->closed()
+            ->startedOn($latestStartedAt)
             ->create();
 
         $vm = app(FetchCoachDashboardAction::class)($coach);
 
         $first = $vm->assignedEnrollments->first();
-        $this->assertNotNull($first->last_activity_at);
+        $this->assertTrue($latestStartedAt->equalTo(Carbon::parse($first->last_activity_at)));
+    }
+
+    public function test_assigned_enrollment_display_query_count_does_not_grow_with_number_of_students(): void
+    {
+        $coach = User::factory()->coach()->inProgress()->create();
+        $cert = Certification::factory()->published()->create();
+        $this->attachCoach($cert, $coach);
+        Enrollment::factory()->for($cert)->learning()->create();
+
+        $singleStudentQueryCount = $this->countDashboardQueries($coach);
+
+        Enrollment::factory()->count(19)->for($cert)->learning()->create();
+
+        $twentyStudentsQueryCount = $this->countDashboardQueries($coach);
+
+        $this->assertSame($singleStudentQueryCount, $twentyStudentsQueryCount);
     }
 
     public function test_only_passed_and_learning_enrollments_are_displayed(): void
@@ -146,5 +172,33 @@ class FetchCoachDashboardActionTest extends TestCase
             'assigned_at' => now(),
             'unassigned_at' => null,
         ]);
+    }
+
+    private function countDashboardQueries(User $coach): int
+    {
+        $connection = DB::connection();
+        $wasLogging = $connection->logging();
+
+        if (! $wasLogging) {
+            $connection->flushQueryLog();
+            $connection->enableQueryLog();
+        }
+
+        $initialQueryCount = count($connection->getQueryLog());
+
+        try {
+            $vm = app(FetchCoachDashboardAction::class)($coach);
+
+            view('dashboard._partials.coach.assigned-students-list', [
+                'enrollments' => $vm->assignedEnrollments,
+            ])->render();
+
+            return count($connection->getQueryLog()) - $initialQueryCount;
+        } finally {
+            if (! $wasLogging) {
+                $connection->disableQueryLog();
+                $connection->flushQueryLog();
+            }
+        }
     }
 }
