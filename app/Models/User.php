@@ -106,6 +106,14 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasMany<AiChatConversation, $this>
+     */
+    public function aiChatConversations(): HasMany
+    {
+        return $this->hasMany(AiChatConversation::class);
+    }
+
+    /**
      * 資格スイッチャー(<x-enrollment-switcher>)に表示する受講中(learning + passed)の受講登録。
      * 資格名表示のため certification を eager load し登録順に並べる。リレーションとして定義することで、
      * 1 リクエスト内でサイドバーとインラインに複数描画されても結果がキャッシュされ再クエリされない。
