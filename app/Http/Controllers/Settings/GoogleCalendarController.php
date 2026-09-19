@@ -6,7 +6,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\GoogleCalendarCredential;
-use App\Services\GoogleCalendarApiGateway;
+use App\Services\Contracts\GoogleCalendarGateway;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -16,7 +16,7 @@ use Throwable;
 
 final class GoogleCalendarController extends Controller
 {
-    public function redirect(Request $request, GoogleCalendarApiGateway $gateway): RedirectResponse
+    public function redirect(Request $request, GoogleCalendarGateway $gateway): RedirectResponse
     {
         $state = Str::random(64);
         $request->session()->put('google_calendar_oauth_state', $state);
@@ -24,7 +24,7 @@ final class GoogleCalendarController extends Controller
         return redirect()->away($gateway->authorizationUrl($state));
     }
 
-    public function callback(Request $request, GoogleCalendarApiGateway $gateway): RedirectResponse
+    public function callback(Request $request, GoogleCalendarGateway $gateway): RedirectResponse
     {
         $expectedState = $request->session()->pull('google_calendar_oauth_state');
         $actualState = $request->query('state');
@@ -75,7 +75,7 @@ final class GoogleCalendarController extends Controller
             ->with('success', 'Google カレンダーと連携しました。');
     }
 
-    public function destroy(Request $request, GoogleCalendarApiGateway $gateway): RedirectResponse
+    public function destroy(Request $request, GoogleCalendarGateway $gateway): RedirectResponse
     {
         $credential = $request->user()->googleCredential;
 

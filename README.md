@@ -114,6 +114,8 @@ http://localhost:8000 にアクセスし、下記の[ログインアカウント
 ```bash
 sail artisan test                  # 全テスト実行
 sail artisan test --filter=Xxx    # クラス名・メソッド名で絞り込み
+sail composer test:external-api   # Google / Gemini / Stripe のモックテストのみ
+sail composer test:without-external-api # 外部 API モックテストを除外
 ```
 
 ## コード整形

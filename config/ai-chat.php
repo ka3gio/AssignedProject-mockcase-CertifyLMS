@@ -13,5 +13,7 @@ return [
         'model' => 'gemini-3.5-flash',
         'base_url' => 'https://generativelanguage.googleapis.com',
         'timeout' => 30,
+        'retry_times' => 2,
+        'retry_sleep_ms' => 100,
     ],
 ];
