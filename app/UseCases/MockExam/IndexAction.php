@@ -25,17 +25,19 @@ final class IndexAction
         ?bool $isPublished = null,
         int $perPage = 20,
     ): LengthAwarePaginator {
-        $query = MockExam::query();
+        $query = MockExam::query()
+            ->with(['certification', 'createdBy', 'updatedBy'])
+            ->withCount('mockExamQuestions');
 
         if ($auth->role === UserRole::Coach) {
             $query->whereHas(
                 'certification.coaches',
-                fn ($q) => $q->where('users.id', $auth->id),
+                fn($q) => $q->where('users.id', $auth->id),
             );
         }
 
         if ($keyword !== null && $keyword !== '') {
-            $query->where('title', 'LIKE', '%'.$keyword.'%');
+            $query->where('title', 'LIKE', '%' . $keyword . '%');
         }
 
         if ($certificationId !== null && $certificationId !== '') {
@@ -47,6 +49,8 @@ final class IndexAction
         }
 
         return $query
+            ->with(['certification', 'updatedBy'])
+            ->withCount('mockExamQuestions')
             ->orderBy('certification_id')
             ->orderBy('order')
             ->orderByDesc('updated_at')
