@@ -10,7 +10,8 @@ use App\Models\User;
 /**
  * ユーザー退会の物理的処理を集約する Service。
  *
- * email を `{ulid}@deleted.invalid` 形式へリネーム + status=Withdrawn + soft delete を 1 操作で行う。
+ * email を `{ulid}@deleted.invalid` 形式へリネーム + status=Withdrawn + soft delete を 1 操作で行い、
+ * 管理者ダッシュボード集計を無効化する。
  * 呼出側 Action（`WithdrawAction` / `RevokeInvitationAction` / `ExpireInvitationsAction`）が
  * 同一トランザクション内で `UserStatusChangeService::record()` も呼んで監査ログを記録する契約。
  *
@@ -19,6 +20,10 @@ use App\Models\User;
  */
 final class UserWithdrawalService
 {
+    public function __construct(
+        private readonly AdminDashboardCacheService $dashboardCache,
+    ) {}
+
     /**
      * ユーザーを退会状態にする（email リネーム + status 更新 + soft delete）。
      *
@@ -33,5 +38,6 @@ final class UserWithdrawalService
         ])->save();
 
         $user->delete();
+        $this->dashboardCache->forget();
     }
 }

@@ -6,6 +6,7 @@ namespace App\UseCases\Dashboard;
 
 use App\Http\Controllers\DashboardController;
 use App\Models\User;
+use App\Services\AdminDashboardCacheService;
 use App\Services\EnrollmentStatsService;
 use App\UseCases\Dashboard\ViewModels\AdminDashboardViewModel;
 
@@ -16,7 +17,7 @@ use App\UseCases\Dashboard\ViewModels\AdminDashboardViewModel;
  * 修了申請待ち一覧 / プラン期限切れ / 滞留検知 / 直近通知は本ロールでは表示しない
  * (admin 宛通知は notification spec で発火しないため、admin 通知導線は実用上死に機能になる)。
  *
- * 本 Action は集計の取得とセクション単位の例外フォールバック(safe)のみを担う(薄い集約に保つ)。
+ * 重い集計は AdminDashboardCacheService 経由で取得し、セクション単位の例外は safe() でフォールバックする。
  *
  * @see DashboardController::index()
  */
@@ -26,12 +27,19 @@ final class FetchAdminDashboardAction
 
     public function __construct(
         private readonly EnrollmentStatsService $stats,
+        private readonly AdminDashboardCacheService $cache,
     ) {}
 
     public function __invoke(User $admin): AdminDashboardViewModel
     {
-        $kpi = $this->safe(fn () => $this->stats->adminKpi());
-        $completionRate = $this->safe(fn () => $this->stats->completionRateByCertification());
+        $kpi = $this->safe(
+            fn () => $this->cache->rememberKpi(fn () => $this->stats->adminKpi()),
+        );
+        $completionRate = $this->safe(
+            fn () => $this->cache->rememberCompletionRate(
+                fn () => $this->stats->completionRateByCertification(),
+            ),
+        );
 
         $byCertificationTop10 = $kpi !== null
             ? collect($kpi['by_certification'])->take(10)

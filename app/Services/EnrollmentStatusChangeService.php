@@ -10,16 +10,17 @@ use App\Models\EnrollmentStatusLog;
 use App\Models\User;
 
 /**
- * Enrollment 状態遷移の監査ログ(`EnrollmentStatusLog`)を INSERT する Service。
+ * Enrollment 状態遷移の監査ログを記録し、管理者ダッシュボード集計を無効化する Service。
  *
  * 呼出側 Action がトランザクション内で recordStatusChange() を呼ぶ前提。本 Service 自体は
- * DB::transaction() を持たない(`backend-services.md` の規約準拠、ステートレス INSERT only)。
- *
- * `final` 不採用: Mockery で recordStatusChange を mock してトランザクション原子性の rollback 検証を
- * Action テストで行う可能性があるため(`UserStatusChangeService` と同じ判断軸)。
+ * DB::transaction() を持たず、キャッシュの commit 前後の無効化は AdminDashboardCacheService に委譲する。
  */
 final class EnrollmentStatusChangeService
 {
+    public function __construct(
+        private readonly AdminDashboardCacheService $dashboardCache,
+    ) {}
+
     /**
      * @param Enrollment $enrollment 状態遷移する対象 Enrollment
      * @param ?EnrollmentStatus $fromStatus 遷移前ステータス(初回登録時のみ null、それ以降は必須)
@@ -34,12 +35,16 @@ final class EnrollmentStatusChangeService
         ?User $changedBy,
         ?string $reason = null,
     ): EnrollmentStatusLog {
-        return $enrollment->statusLogs()->create([
+        $log = $enrollment->statusLogs()->create([
             'from_status' => $fromStatus?->value,
             'to_status' => $toStatus->value,
             'changed_by_user_id' => $changedBy?->id,
             'changed_reason' => $reason,
             'changed_at' => now(),
         ]);
+
+        $this->dashboardCache->forget();
+
+        return $log;
     }
 }
