@@ -111,6 +111,18 @@ final class NotificationControllerTest extends TestCase
         $this->assertNotNull($notification->fresh()->read_at);
     }
 
+    public function test_backslash_network_path_redirect_is_rejected(): void
+    {
+        $user = User::factory()->student()->inProgress()->create();
+        $notification = $this->createNotification($user, '通知', null, '/\\evil.example');
+
+        $this->actingAs($user)
+            ->post(route('notifications.markAsRead', $notification))
+            ->assertRedirect(route('notifications.index'));
+
+        $this->assertNotNull($notification->fresh()->read_at);
+    }
+
     public function test_user_cannot_mark_another_users_notification_as_read(): void
     {
         $user = User::factory()->student()->inProgress()->create();
@@ -174,6 +186,25 @@ final class NotificationControllerTest extends TestCase
     {
         $this->get(route('notifications.index'))->assertRedirect('/login');
         $this->post(route('notifications.markAllAsRead'))->assertRedirect('/login');
+    }
+
+    public function test_topbar_notification_popover_is_visible_to_student_and_coach_but_not_admin(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $admin = User::factory()->admin()->create();
+
+        foreach ([$student, $coach] as $recipient) {
+            $this->actingAs($recipient)
+                ->get(route('notifications.index'))
+                ->assertOk()
+                ->assertSee('data-notification-popover-trigger', false);
+        }
+
+        $this->actingAs($admin)
+            ->get(route('notifications.index'))
+            ->assertOk()
+            ->assertDontSee('data-notification-popover-trigger', false);
     }
 
     private function createNotification(

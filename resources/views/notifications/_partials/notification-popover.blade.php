@@ -8,6 +8,8 @@
     role="dialog"
     aria-modal="false"
     aria-label="通知"
+    data-notifications-url="{{ route('api.notifications.index') }}"
+    data-read-all-url="{{ route('api.notifications.markAllAsRead') }}"
     class="hidden absolute right-0 mt-2 w-[400px] max-w-[calc(100vw-1rem)] max-h-[70vh] z-30 origin-top-right rounded-lg shadow-lg border border-subtle bg-white opacity-0 -translate-y-1 transition duration-150 ease-out flex-col"
     style="display: none;"
 >
@@ -49,7 +51,7 @@
                 class="inline-block h-6 w-6 animate-spin rounded-full border-2 border-ink-200 border-t-primary-600"
             ></span>
         </div>
-        <div data-notification-popover-empty class="hidden p-6 text-center text-xs text-ink-500">
+        <div data-notification-popover-empty role="status" class="hidden p-6 text-center text-xs text-ink-500">
             通知はありません。
         </div>
         <ul data-notification-popover-items class="divide-y divide-subtle"></ul>
@@ -72,7 +74,7 @@
             <a
                 href="#"
                 data-notification-popover-row
-                class="flex items-start gap-3 px-4 py-3 hover:bg-ink-50 transition-colors aria-[data-unread=true]:bg-primary-50/30"
+                class="flex items-start gap-3 px-4 py-3 hover:bg-ink-50 transition-colors data-[unread=true]:bg-primary-50/30"
             >
                 <span data-notification-popover-row-dot class="mt-2 inline-block w-2 h-2 rounded-full bg-primary-600 shrink-0"></span>
                 <div class="min-w-0 flex-1">
