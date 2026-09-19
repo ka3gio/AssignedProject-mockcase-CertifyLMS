@@ -4,14 +4,27 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
  * 業務イベント通知の共通チャンネルとメール表現。
  */
-abstract class BusinessNotification extends Notification
+abstract class BusinessNotification extends Notification implements ShouldQueueAfterCommit
 {
+    use Queueable;
+
+    /** 初回実行と、段階的な待機を挟む3回の再試行。 */
+    public int $tries = 4;
+
+    /** @return array<int, int> */
+    public function backoff(): array
+    {
+        return [60, 300, 900];
+    }
+
     /**
      * @return array<int, string>
      */

@@ -14,7 +14,6 @@ use App\UseCases\Announcement\StoreAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
-use InvalidArgumentException;
 use Tests\TestCase;
 
 class StoreTest extends TestCase
@@ -135,26 +134,26 @@ class StoreTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    public function test_database_records_are_rolled_back_when_synchronous_delivery_fails(): void
+    public function test_request_does_not_open_mail_transport_before_queuing_announcement(): void
     {
         $admin = User::factory()->admin()->create();
         $target = User::factory()->student()->inProgress()->create();
-        config(['mail.default' => 'undefined-test-mailer']);
+        config([
+            'mail.default' => 'undefined-test-mailer',
+            'queue.default' => 'database',
+        ]);
 
-        try {
-            $this->app->make(StoreAction::class)(
-                $admin,
-                $this->payload([
-                    'target_type' => AnnouncementTargetType::User->value,
-                    'target_user_id' => $target->id,
-                ]),
-            );
+        $announcement = $this->app->make(StoreAction::class)(
+            $admin,
+            $this->payload([
+                'target_type' => AnnouncementTargetType::User->value,
+                'target_user_id' => $target->id,
+            ]),
+        );
 
-            $this->fail('同期メール送信の失敗が例外として通知されませんでした。');
-        } catch (InvalidArgumentException) {
-            $this->assertDatabaseCount('announcements', 0);
-            $this->assertDatabaseCount('notifications', 0);
-        }
+        $this->assertSame(1, $announcement->dispatched_count);
+        $this->assertDatabaseHas('announcements', ['id' => $announcement->id]);
+        $this->assertDatabaseCount('notifications', 0);
     }
 
     public function test_admin_can_view_create_index_and_detail_pages(): void
