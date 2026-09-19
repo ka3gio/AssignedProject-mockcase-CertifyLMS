@@ -9,8 +9,12 @@ use App\Exceptions\Mentoring\MeetingOutOfAvailabilityException;
 use App\Models\Certification;
 use App\Models\CoachAvailability;
 use App\Models\Meeting;
+use App\Models\User;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * 担当コーチ集合の面談可能時間枠を 60 分単位で展開し、空きスロットを集計する Service。
@@ -21,10 +25,15 @@ use Illuminate\Support\Collection;
  */
 final class MeetingAvailabilityService
 {
+    /** @var array<string, array<int, array{start: CarbonInterface, end: CarbonInterface}>> */
+    private array $busyCache = [];
+
+    public function __construct(private readonly GoogleCalendarApiGateway $googleCalendar) {}
+
     /**
      * 指定 Certification の担当コーチ集合について、指定日 1 日分の 60 分単位空きスロットを返す。
      *
-     * 1 リクエストあたり availability 1 クエリ + meetings 1 クエリ で完結させる。
+     * 担当コーチと連携情報、availability、meetings をそれぞれ一括取得し、N+1 を避ける。
      *
      * @return Collection<int, array{slot_start: Carbon, slot_end: Carbon, available_coach_count: int}>
      */
@@ -34,7 +43,7 @@ final class MeetingAvailabilityService
         $dayEnd = $date->copy()->endOfDay();
         $dayOfWeek = $date->dayOfWeek;
 
-        $coaches = $certification->coaches()->get();
+        $coaches = $certification->coaches()->with('googleCredential')->get()->keyBy('id');
         if ($coaches->isEmpty()) {
             return collect();
         }
@@ -70,7 +79,11 @@ final class MeetingAvailabilityService
                 $coachId = $availability->coach_id;
                 $booked = $bookedByCoach[$coachId] ?? [];
 
-                if (! in_array($slotKey, $booked, true)) {
+                $coach = $coaches->get($coachId);
+
+                if (! in_array($slotKey, $booked, true)
+                    && $coach !== null
+                    && ! $this->isGoogleBusyForSlot($coach, $slot, $slot->copy()->addHour())) {
                     $slotCounts[$slotKey] = ($slotCounts[$slotKey] ?? 0) + 1;
                 }
 
@@ -108,5 +121,39 @@ final class MeetingAvailabilityService
         if (! $matched) {
             throw new MeetingOutOfAvailabilityException;
         }
+    }
+
+    public function isGoogleBusyForSlot(User $coach, Carbon $slotStart, Carbon $slotEnd): bool
+    {
+        $credential = $coach->googleCredential;
+        if ($credential === null) {
+            return false;
+        }
+
+        $cacheKey = $credential->id.':'.$slotStart->toDateString();
+        if (! array_key_exists($cacheKey, $this->busyCache)) {
+            try {
+                $this->busyCache[$cacheKey] = $this->googleCalendar->busyPeriods(
+                    $credential,
+                    $slotStart->copy()->startOfDay(),
+                    $slotStart->copy()->addDay()->startOfDay(),
+                );
+            } catch (Throwable $exception) {
+                Log::warning('Google カレンダーの空き状況取得に失敗したため LMS の判定へフォールバックしました。', [
+                    'coach_id' => $coach->id,
+                    'date' => $slotStart->toDateString(),
+                    'exception' => $exception,
+                ]);
+                $this->busyCache[$cacheKey] = [];
+            }
+        }
+
+        foreach ($this->busyCache[$cacheKey] as $period) {
+            if ($period['start']->lessThan($slotEnd) && $period['end']->greaterThan($slotStart)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -23,6 +23,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LearningHourTargetController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingPackController;
+use App\Http\Controllers\MeetingQuotaCheckoutController;
 use App\Http\Controllers\MeetingQuotaHistoryController;
 use App\Http\Controllers\MockExamAnswerController;
 use App\Http\Controllers\MockExamCatalogController;
@@ -47,12 +48,15 @@ use App\Http\Controllers\SectionQuestionController;
 use App\Http\Controllers\SectionQuizController;
 use App\Http\Controllers\SectionQuizResultController;
 use App\Http\Controllers\Settings\AvailabilityController as SettingsAvailabilityController;
+use App\Http\Controllers\Settings\GoogleCalendarController as SettingsGoogleCalendarController;
 use App\Http\Controllers\Settings\PasswordController as SettingsPasswordController;
 use App\Http\Controllers\Settings\ProfileController as SettingsProfileController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WeakDrillController;
 use App\Http\Controllers\WeakDrillResultController;
+use App\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -565,12 +569,34 @@ Route::middleware(['auth', 'role:coach'])
     });
 
 // ============================================================
+// コーチ専用ルート — Google カレンダー連携
+// ============================================================
+Route::middleware(['auth', 'role:coach'])
+    ->prefix('settings/google-calendar')
+    ->name('settings.google-calendar.')
+    ->group(function () {
+        Route::get('connect', [SettingsGoogleCalendarController::class, 'redirect'])->name('redirect');
+        Route::get('callback', [SettingsGoogleCalendarController::class, 'callback'])->name('callback');
+        Route::delete('/', [SettingsGoogleCalendarController::class, 'destroy'])->name('destroy');
+    });
+
+// ============================================================
 // 受講生専用ルート(受講中=in_progress のみ通過)
 // ============================================================
 Route::middleware(['auth', 'role:student', 'active-learning'])->prefix('meeting-quota')->name('meeting-quota.')->group(function () {
+    // 追加面談購入
+    Route::get('checkout', [MeetingQuotaCheckoutController::class, 'index'])->name('checkout.select');
+    Route::post('checkout', [MeetingQuotaCheckoutController::class, 'store'])->name('checkout.create');
+    Route::get('success', [MeetingQuotaCheckoutController::class, 'success'])->name('success');
+
     // 面談回数履歴
     Route::get('history', [MeetingQuotaHistoryController::class, 'index'])->name('history');
 });
+
+// Stripe からの決済イベント受信（Stripe-Signature による署名検証のみ）
+Route::post('webhooks/stripe', StripeWebhookController::class)
+    ->withoutMiddleware(VerifyCsrfToken::class)
+    ->name('webhooks.stripe');
 
 // ============================================================
 // 受講生・コーチ共有 — 質問掲示板

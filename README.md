@@ -143,5 +143,11 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
 - `AI_CHAT_ENABLED` — AI 相談機能全体の有効・無効を切り替えます。`true` で有効、`false` で無効です
 - `GEMINI_API_KEY` — AI 相談で Gemini API を利用するための API キーです
+- `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` — Google Cloud Console で作成した Web アプリケーション用 OAuth クライアントの認証情報です
+- `GOOGLE_CALENDAR_REDIRECT_URI` — Google Cloud Console の「承認済みのリダイレクト URI」と完全一致させてください。ローカル既定値は `http://localhost:8000/settings/google-calendar/callback` です
+- `STRIPE_SECRET` — Stripe のテストモード用シークレットキー（`sk_test_...`）です
+- `STRIPE_WEBHOOK_SECRET` — Stripe CLI または Stripe ダッシュボードで発行される Webhook 署名シークレット（`whsec_...`）です
+
+Google カレンダー連携では access token と refresh token を保存します。本チケットの開発用実装では平文保存ですが、本番運用ではアプリケーションレベルまたはデータベースレベルで必ず暗号化してください。Seeder が作成する `coach@certify-lms.test` の認証情報は連携状態 UI と解除動作の確認専用で、実際の Google API には使用できません。実連携を確認する場合は、Google Cloud Console でテストユーザーと OAuth クライアントを設定し、画面から連携し直してください。
 
 新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。

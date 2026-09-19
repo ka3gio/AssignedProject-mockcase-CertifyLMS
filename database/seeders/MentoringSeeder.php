@@ -10,6 +10,7 @@ use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\CoachAvailability;
 use App\Models\Enrollment;
+use App\Models\GoogleCalendarCredential;
 use App\Models\Meeting;
 use App\Models\MeetingMemo;
 use App\Models\MeetingQuotaTransaction;
@@ -35,10 +36,34 @@ final class MentoringSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->seedGoogleCalendarCredentials();
         $this->seedCoachAvailabilities();
         $this->seedFixedStudentMeetings();
         $this->seedNoQuotaStudentMeetings();
         $this->seedDemoMeetings();
+    }
+
+    /**
+     * 連携状態 UI の確認用に固定コーチ1名だけを連携済みにする。
+     * ダミートークンのため実 Google API の動作確認には使用しない。
+     */
+    private function seedGoogleCalendarCredentials(): void
+    {
+        $coach = User::query()->where('email', 'coach@certify-lms.test')->first();
+        if ($coach === null) {
+            return;
+        }
+
+        GoogleCalendarCredential::query()->updateOrCreate(
+            ['coach_id' => $coach->id],
+            [
+                'access_token' => 'demo-google-access-token',
+                'refresh_token' => 'demo-google-refresh-token',
+                'token_expires_at' => now()->addYear(),
+                'calendar_id' => $coach->email,
+                'connected_at' => now(),
+            ],
+        );
     }
 
     /**

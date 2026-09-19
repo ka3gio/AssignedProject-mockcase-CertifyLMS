@@ -22,6 +22,7 @@ use App\Models\MeetingMemo;
 use App\Models\User;
 use App\Services\BusinessNotificationService;
 use App\Services\CoachMeetingLoadService;
+use App\Services\GoogleCalendarSyncService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
@@ -82,8 +83,8 @@ class MeetingController extends Controller
         $query = Meeting::query()
             ->with(['enrollment.certification', 'student'])
             ->forCoach($request->user())
-            ->when($studentId, fn($q, $id) => $q->where('student_id', $id))
-            ->when($enrollmentId, fn($q, $id) => $q->where('enrollment_id', $id));
+            ->when($studentId, fn ($q, $id) => $q->where('student_id', $id))
+            ->when($enrollmentId, fn ($q, $id) => $q->where('enrollment_id', $id));
 
         // upcoming: 次の面談を一番上に置く (昇順) / past + all: 直近の活動を一番上 (降順)
         $meetings = match ($filter) {
@@ -147,7 +148,7 @@ class MeetingController extends Controller
     {
         $user = auth()->user();
         $enrollments = $user
-                ?->enrollments()
+            ?->enrollments()
             ->whereIn('status', [EnrollmentStatus::Learning->value, EnrollmentStatus::Passed->value])
             ->with('certification')
             ->get();
@@ -169,19 +170,24 @@ class MeetingController extends Controller
         MeetingQuotaService $quotaService,
         ConsumeQuotaAction $consumeAction,
         BusinessNotificationService $notifications,
+        GoogleCalendarSyncService $calendarSync,
     ): RedirectResponse {
         $scheduledAt = Carbon::parse($request->validated('scheduled_at'));
         $topic = $request->validated('topic');
         $student = $enrollment->user;
 
-        $meeting = DB::transaction(function () use ($enrollment, $student, $scheduledAt, $topic, $availabilityService, $coachLoadService, $quotaService, $consumeAction, ) {
+        $meeting = DB::transaction(function () use ($enrollment, $student, $scheduledAt, $topic, $availabilityService, $coachLoadService, $quotaService, $consumeAction) {
             if ($quotaService->remaining($student) < 1) {
                 throw new InsufficientMeetingQuotaException;
             }
 
             $availabilityService->validateSlot($enrollment->certification, $scheduledAt);
 
-            $candidates = $this->findAvailableCoaches($enrollment->certification, $scheduledAt);
+            $candidates = $this->findAvailableCoaches(
+                $enrollment->certification,
+                $scheduledAt,
+                $availabilityService,
+            );
             if ($candidates->isEmpty()) {
                 throw new MeetingNoAvailableCoachException;
             }
@@ -209,6 +215,7 @@ class MeetingController extends Controller
             return $meeting->fresh();
         });
 
+        $calendarSync->createForMeeting($meeting);
         $notifications->notifyMeetingReserved($meeting);
 
         return redirect()
@@ -224,6 +231,7 @@ class MeetingController extends Controller
         Meeting $meeting,
         RefundQuotaAction $refundAction,
         BusinessNotificationService $notifications,
+        GoogleCalendarSyncService $calendarSync,
     ): RedirectResponse {
         $this->authorize('cancel', $meeting);
 
@@ -248,7 +256,9 @@ class MeetingController extends Controller
             ($refundAction)($locked->student, $meeting->id);
         });
 
-        $notifications->notifyMeetingCanceled($meeting->refresh(), $actor);
+        $meeting->refresh();
+        $calendarSync->deleteForMeeting($meeting);
+        $notifications->notifyMeetingCanceled($meeting, $actor);
 
         return redirect()
             ->route('meetings.show', $meeting)
@@ -263,7 +273,7 @@ class MeetingController extends Controller
         $body = $request->validated('body');
 
         DB::transaction(function () use ($meeting, $body) {
-            if (!in_array($meeting->status, [MeetingStatus::Reserved, MeetingStatus::Completed], true)) {
+            if (! in_array($meeting->status, [MeetingStatus::Reserved, MeetingStatus::Completed], true)) {
                 throw MeetingStatusTransitionException::forMemo();
             }
 
@@ -291,7 +301,7 @@ class MeetingController extends Controller
 
         return response()->json([
             'date' => $date->toDateString(),
-            'slots' => $slots->map(fn(array $slot) => [
+            'slots' => $slots->map(fn (array $slot) => [
                 'slot_start' => $slot['slot_start']->toIso8601String(),
                 'slot_end' => $slot['slot_end']->toIso8601String(),
                 'available_coach_count' => $slot['available_coach_count'],
@@ -300,26 +310,34 @@ class MeetingController extends Controller
     }
 
     /**
-     * 担当コーチ集合のうち、(1) 当該時刻に有効な availability 枠があり、
-     * (2) 当該時刻に reserved / completed の Meeting を持たないコーチ集合を返す。
-     *
      * @return Collection<int, User>
      */
-    private function findAvailableCoaches(Certification $certification, Carbon $scheduledAt): Collection
-    {
+    private function findAvailableCoaches(
+        Certification $certification,
+        Carbon $scheduledAt,
+        MeetingAvailabilityService $availabilityService,
+    ): Collection {
         $time = $scheduledAt->format('H:i:s');
+        $slotEnd = $scheduledAt->copy()->addHour();
 
         return $certification->coaches()
-            ->whereHas('coachAvailabilities', function ($q) use ($scheduledAt, $time) {
-                $q->where('day_of_week', $scheduledAt->dayOfWeek)
+            ->with('googleCredential')
+            ->whereHas('coachAvailabilities', function ($query) use ($scheduledAt, $time) {
+                $query->where('day_of_week', $scheduledAt->dayOfWeek)
                     ->where('is_active', true)
                     ->where('start_time', '<=', $time)
                     ->where('end_time', '>', $time);
             })
-            ->whereDoesntHave('meetingsAsCoach', function ($q) use ($scheduledAt) {
-                $q->where('scheduled_at', $scheduledAt)
+            ->whereDoesntHave('meetingsAsCoach', function ($query) use ($scheduledAt) {
+                $query->where('scheduled_at', $scheduledAt)
                     ->whereIn('status', [MeetingStatus::Reserved->value, MeetingStatus::Completed->value]);
             })
-            ->get();
+            ->get()
+            ->reject(fn (User $coach): bool => $availabilityService->isGoogleBusyForSlot(
+                $coach,
+                $scheduledAt,
+                $slotEnd,
+            ))
+            ->values();
     }
 }

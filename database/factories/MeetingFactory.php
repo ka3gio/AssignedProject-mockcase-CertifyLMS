@@ -35,6 +35,8 @@ class MeetingFactory extends Factory
             'status' => MeetingStatus::Reserved->value,
             'topic' => fake()->sentence(8),
             'meeting_url_snapshot' => 'https://meet.example.com/'.fake()->lexify('??????'),
+            'google_calendar_event_id' => null,
+            'google_calendar_id' => null,
             'canceled_by_user_id' => null,
             'canceled_at' => null,
             'completed_at' => null,
