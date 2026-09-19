@@ -10,6 +10,8 @@ use App\Models\Enrollment;
 use App\Models\User;
 use App\Services\EnrollmentStatusChangeService;
 use App\UseCases\Dashboard\FetchAdminDashboardAction;
+use App\UseCases\Enrollment\DestroyAction;
+use App\UseCases\User\WithdrawAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +102,27 @@ class AdminDashboardCacheTest extends TestCase
         );
     }
 
+    public function test_cached_aggregates_are_recalculated_after_configured_ttl_expires(): void
+    {
+        // Arrange: 短い TTL を設定し、受講中 1 件をキャッシュする
+        config(['dashboard.admin_cache_ttl_seconds' => 5]);
+        $admin = User::factory()->admin()->inProgress()->create();
+        $cert = Certification::factory()->published()->create();
+        Enrollment::factory()->for($cert)->learning()->create();
+        Cache::flush();
+        app(FetchAdminDashboardAction::class)($admin);
+
+        // Act: 無効化経路を通さず DB を更新し、設定した TTL より先へ時刻を進める
+        Enrollment::factory()->for($cert)->passed()->create();
+        $this->travel(6)->seconds();
+        $after = app(FetchAdminDashboardAction::class)($admin);
+
+        // Assert: 期限切れ後は DB から再集計される
+        $this->assertSame(1, $after->kpi['passed_count']);
+        $rate = $after->completionRateByCertification->firstWhere('certification_id', $cert->id)['completion_rate'];
+        $this->assertSame(0.5, $rate);
+    }
+
     public function test_admin_kpi_cache_is_invalidated_on_enrollment_status_change(): void
     {
         // Arrange: admin + 受講中 2 件を 1 度集計してキャッシュさせる
@@ -156,5 +179,46 @@ class AdminDashboardCacheTest extends TestCase
             $afterRate,
             '状態遷移後は修了率キャッシュも無効化され、最新の修了率(1/2)が返るはず',
         );
+    }
+
+    public function test_both_caches_are_invalidated_when_learning_enrollment_is_deleted(): void
+    {
+        // Arrange: 受講中 1 件を含む両集計をキャッシュする
+        $admin = User::factory()->admin()->inProgress()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $cert = Certification::factory()->published()->create();
+        $enrollment = Enrollment::factory()->for($student)->for($cert)->learning()->create();
+        Cache::flush();
+        app(FetchAdminDashboardAction::class)($admin);
+
+        // Act: 状態遷移ログを通らない受講解除で Enrollment を SoftDelete する
+        app(DestroyAction::class)($enrollment);
+        $after = app(FetchAdminDashboardAction::class)($admin);
+
+        // Assert: KPI と修了率の両方が最新状態へ更新される
+        $this->assertTrue($after->isEmptyState);
+        $this->assertSame(0, $after->kpi['learning_count']);
+        $this->assertTrue($after->completionRateByCertification->isEmpty());
+    }
+
+    public function test_both_caches_are_invalidated_when_user_is_withdrawn(): void
+    {
+        // Arrange: 受講中 1 件をキャッシュした後、無効化経路を通さず 1 件追加する
+        $admin = User::factory()->admin()->inProgress()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $cert = Certification::factory()->published()->create();
+        Enrollment::factory()->for($student)->for($cert)->learning()->create();
+        Cache::flush();
+        app(FetchAdminDashboardAction::class)($admin);
+        Enrollment::factory()->for($cert)->learning()->create();
+
+        // Act: User の退会経路を実行してから再表示する
+        app(WithdrawAction::class)($student, $admin);
+        $after = app(FetchAdminDashboardAction::class)($admin);
+
+        // Assert: 現行の集計定義は退会者の Enrollment も含むが、退会を契機に最新値へ再集計される
+        $this->assertSame(2, $after->kpi['learning_count']);
+        $row = $after->completionRateByCertification->firstWhere('certification_id', $cert->id);
+        $this->assertSame(2, $row['total']);
     }
 }
