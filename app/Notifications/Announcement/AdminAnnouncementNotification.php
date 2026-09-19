@@ -11,7 +11,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Str;
 
 /**
- * 管理者お知らせをアプリ内通知とメールへ同期配信する。
+ * 管理者お知らせをアプリ内通知とメールへ非同期配信する。
  */
 final class AdminAnnouncementNotification extends BusinessNotification
 {

@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * お知らせと配信実績を作成し、対象受講生へアプリ内通知・メールを同期配信する。
- * 途中失敗時は DB をロールバックする。先行して送信済みのメールが再操作時に重複し得る点は MVP の許容事項。
+ * お知らせと配信実績を作成し、対象受講生へのアプリ内通知・メールを commit 後のキューへ投入する。
+ * dispatched_count / dispatched_at は、実送信の完了数・完了時刻ではなく配信受付時点の対象数・受付時刻を表す。
  */
 final class StoreAction
 {

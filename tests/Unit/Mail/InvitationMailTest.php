@@ -9,6 +9,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\SendQueuedMailable;
 use Tests\TestCase;
 
 /**
@@ -98,5 +99,15 @@ class InvitationMailTest extends TestCase
             $mailable,
             '招待メールは ShouldQueue 実装で非同期キュー送信されるはず (送信遅延がユーザー体感に影響しないように)',
         );
+    }
+
+    public function test_queued_delivery_waits_for_commit_and_retries_progressively(): void
+    {
+        $invitation = Invitation::factory()->pending()->create();
+        $job = new SendQueuedMailable(new InvitationMail($invitation));
+
+        $this->assertTrue($job->afterCommit);
+        $this->assertSame(4, $job->tries);
+        $this->assertSame([60, 300, 900], $job->backoff());
     }
 }

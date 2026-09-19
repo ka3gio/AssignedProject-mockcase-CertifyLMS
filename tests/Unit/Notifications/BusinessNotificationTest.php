@@ -6,6 +6,8 @@ namespace Tests\Unit\Notifications;
 
 use App\Models\User;
 use App\Notifications\BusinessNotification;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\SendQueuedNotifications;
 use Tests\TestCase;
 
 final class BusinessNotificationTest extends TestCase
@@ -35,5 +37,33 @@ final class BusinessNotificationTest extends TestCase
         $this->assertSame('sample', $notification->toArray($user)['notification_type']);
         $this->assertSame('通知タイトル', $notification->toMail($user)->subject);
         $this->assertStringEndsWith('/dashboard', $notification->toMail($user)->actionUrl);
+    }
+
+    public function test_queues_delivery_after_commit_with_progressive_retries(): void
+    {
+        $notification = new class extends BusinessNotification
+        {
+            protected function payload(): array
+            {
+                return [
+                    'notification_type' => 'sample',
+                    'title' => '通知タイトル',
+                    'message' => '通知本文',
+                    'url' => '/dashboard',
+                ];
+            }
+
+            protected function actionLabel(): string
+            {
+                return '確認する';
+            }
+        };
+
+        $job = new SendQueuedNotifications(new User, $notification, ['mail']);
+
+        $this->assertInstanceOf(ShouldQueue::class, $notification);
+        $this->assertTrue($job->afterCommit);
+        $this->assertSame(4, $job->tries);
+        $this->assertSame([60, 300, 900], $job->backoff());
     }
 }
