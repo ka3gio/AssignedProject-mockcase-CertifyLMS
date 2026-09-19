@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Models\Announcement;
+use App\Models\Certificate;
 use App\Models\Certification;
 use App\Models\CertificationCategory;
 use App\Models\Chapter;
 use App\Models\ChatRoom;
 use App\Models\CoachAvailability;
 use App\Models\Enrollment;
-use App\Models\EnrollmentNote;
 use App\Models\EnrollmentGoal;
+use App\Models\EnrollmentNote;
 use App\Models\Invitation;
 use App\Models\LearningHourTarget;
 use App\Models\LearningSession;
@@ -34,14 +35,15 @@ use App\Models\SectionQuestionAnswer;
 use App\Models\SectionQuestionAttempt;
 use App\Models\User;
 use App\Policies\AnnouncementPolicy;
+use App\Policies\CertificatePolicy;
 use App\Policies\CertificationCategoryPolicy;
 use App\Policies\CertificationPolicy;
 use App\Policies\ChapterPolicy;
 use App\Policies\ChapterViewPolicy;
 use App\Policies\ChatRoomPolicy;
 use App\Policies\CoachAvailabilityPolicy;
-use App\Policies\EnrollmentNotePolicy;
 use App\Policies\EnrollmentGoalPolicy;
+use App\Policies\EnrollmentNotePolicy;
 use App\Policies\EnrollmentPolicy;
 use App\Policies\InvitationPolicy;
 use App\Policies\LearningHourTargetPolicy;
@@ -80,6 +82,7 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected $policies = [
         Announcement::class => AnnouncementPolicy::class,
+        Certificate::class => CertificatePolicy::class,
         Invitation::class => InvitationPolicy::class,
         User::class => UserPolicy::class,
         Certification::class => CertificationPolicy::class,
