@@ -13,7 +13,11 @@ use App\Models\MockExam;
 use App\Models\MockExamSession;
 use App\Models\User;
 use App\UseCases\Enrollment\ReceiveCertificateAction;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -104,5 +108,38 @@ class ReceiveCertificateActionTest extends TestCase
 
         $this->assertDatabaseCount('certificates', 0);
         $this->assertSame(EnrollmentStatus::Learning, $enrollment->refresh()->status);
+    }
+
+    public function test_pdf_storage_failure_rolls_back_completion_and_certificate(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $certification = Certification::factory()->published()->create();
+        $enrollment = Enrollment::factory()->for($student)->for($certification)->learning()->create();
+        $exam = MockExam::factory()->for($certification)->create(['is_published' => true]);
+        MockExamSession::factory()->for($enrollment)->for($exam)->create(['pass' => true]);
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('put')->once()->andReturn(false);
+        Storage::shouldReceive('disk')->once()->with('private')->andReturn($disk);
+
+        $exception = null;
+
+        try {
+            app(ReceiveCertificateAction::class)($enrollment);
+        } catch (RuntimeException $e) {
+            $exception = $e;
+        }
+
+        $this->assertInstanceOf(RuntimeException::class, $exception);
+
+        $enrollment->refresh();
+
+        $this->assertSame(EnrollmentStatus::Learning, $enrollment->status);
+        $this->assertNull($enrollment->passed_at);
+        $this->assertDatabaseCount('certificates', 0);
+        $this->assertDatabaseMissing('enrollment_status_logs', [
+            'enrollment_id' => $enrollment->id,
+            'to_status' => EnrollmentStatus::Passed->value,
+        ]);
     }
 }
