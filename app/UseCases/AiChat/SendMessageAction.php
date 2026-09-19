@@ -186,8 +186,12 @@ final class SendMessageAction
 
         try {
             $response = $this->gemini->generate([
-                ['role' => 'user', 'parts' => [['text' => $userContent]]],
-                ['role' => 'model', 'parts' => [['text' => $assistantContent]]],
+                [
+                    'role' => 'user',
+                    'parts' => [[
+                        'text' => "質問: {$userContent}\n\n回答: {$assistantContent}",
+                    ]],
+                ],
             ], 'この会話を表す日本語の会話タイトルを40文字以内で1つだけ生成してください。引用符や説明は付けないでください。');
 
             $title = $this->normalizeTitle($response['content']);
