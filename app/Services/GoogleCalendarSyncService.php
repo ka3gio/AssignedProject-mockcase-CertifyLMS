@@ -6,12 +6,13 @@ namespace App\Services;
 
 use App\Models\GoogleCalendarCredential;
 use App\Models\Meeting;
+use App\Services\Contracts\GoogleCalendarGateway;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 final class GoogleCalendarSyncService
 {
-    public function __construct(private readonly GoogleCalendarApiGateway $googleCalendar) {}
+    public function __construct(private readonly GoogleCalendarGateway $googleCalendar) {}
 
     public function createForMeeting(Meeting $meeting): void
     {

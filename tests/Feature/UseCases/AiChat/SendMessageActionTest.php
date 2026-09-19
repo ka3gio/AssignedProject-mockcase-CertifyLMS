@@ -10,9 +10,11 @@ use App\UseCases\AiChat\SendMessageAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Group;
+use Tests\ExternalApiTestCase;
 
-class SendMessageActionTest extends TestCase
+#[Group('external-api')]
+class SendMessageActionTest extends ExternalApiTestCase
 {
     use RefreshDatabase;
 

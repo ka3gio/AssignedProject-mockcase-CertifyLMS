@@ -10,6 +10,7 @@ use App\Models\Certification;
 use App\Models\CoachAvailability;
 use App\Models\Meeting;
 use App\Models\User;
+use App\Services\Contracts\GoogleCalendarGateway;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -28,7 +29,7 @@ final class MeetingAvailabilityService
     /** @var array<string, array<int, array{start: CarbonInterface, end: CarbonInterface}>> */
     private array $busyCache = [];
 
-    public function __construct(private readonly GoogleCalendarApiGateway $googleCalendar) {}
+    public function __construct(private readonly GoogleCalendarGateway $googleCalendar) {}
 
     /**
      * 指定 Certification の担当コーチ集合について、指定日 1 日分の 60 分単位空きスロットを返す。

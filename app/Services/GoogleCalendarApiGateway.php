@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\GoogleCalendarCredential;
 use App\Models\Meeting;
+use App\Services\Contracts\GoogleCalendarGateway;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Google\Client;
@@ -14,10 +15,14 @@ use Google\Service\Calendar\Event;
 use Google\Service\Calendar\EventDateTime;
 use Google\Service\Calendar\FreeBusyRequest;
 use Google\Service\Calendar\FreeBusyRequestItem;
+use Google\Service\Exception as GoogleServiceException;
+use Psr\Http\Client\ClientInterface;
 use RuntimeException;
 
-final class GoogleCalendarApiGateway
+final class GoogleCalendarApiGateway implements GoogleCalendarGateway
 {
+    public function __construct(private readonly ?ClientInterface $httpClient = null) {}
+
     public function authorizationUrl(string $state): string
     {
         $client = $this->newClient();
@@ -89,11 +94,17 @@ final class GoogleCalendarApiGateway
 
     public function deleteEvent(GoogleCalendarCredential $credential, string $eventId): void
     {
-        (new GoogleCalendar($this->authorizedClient($credential)))->events->delete(
-            $credential->calendar_id,
-            $eventId,
-            ['sendUpdates' => 'none'],
-        );
+        try {
+            (new GoogleCalendar($this->authorizedClient($credential)))->events->delete(
+                $credential->calendar_id,
+                $eventId,
+                ['sendUpdates' => 'none'],
+            );
+        } catch (GoogleServiceException $exception) {
+            if ($exception->getCode() !== 404) {
+                throw $exception;
+            }
+        }
     }
 
     public function revoke(GoogleCalendarCredential $credential): void
@@ -144,6 +155,9 @@ final class GoogleCalendarApiGateway
         $client->addScope(GoogleCalendar::CALENDAR_EVENTS_OWNED);
         $client->addScope(GoogleCalendar::CALENDAR_FREEBUSY);
         $client->addScope(GoogleCalendar::CALENDAR_CALENDARS_READONLY);
+        if ($this->httpClient !== null) {
+            $client->setHttpClient($this->httpClient);
+        }
 
         return $client;
     }

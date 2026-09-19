@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Exceptions\AiChat\GeminiNotConfiguredException;
 use App\Exceptions\AiChat\GeminiRequestException;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 final class GeminiClient
@@ -30,6 +31,20 @@ final class GeminiClient
                 ->withHeaders(['x-goog-api-key' => $apiKey])
                 ->acceptJson()
                 ->timeout((int) config('ai-chat.gemini.timeout'))
+                ->retry(
+                    max(1, (int) config('ai-chat.gemini.retry_times', 2)),
+                    max(0, (int) config('ai-chat.gemini.retry_sleep_ms', 100)),
+                    static function (ConnectionException|RequestException $exception): bool {
+                        if ($exception instanceof ConnectionException) {
+                            return true;
+                        }
+
+                        $status = $exception->response->status();
+
+                        return $status === 429 || $status >= 500;
+                    },
+                    throw: false,
+                )
                 ->post("/v1beta/models/{$model}:generateContent", [
                     'system_instruction' => [
                         'parts' => [['text' => $systemPrompt]],
