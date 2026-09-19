@@ -14,6 +14,16 @@
                 :maxlength="2000"
                 placeholder="例: 二分探索木の平均比較回数 O(log n) の理由を教えてください"
             />
+
+            <div>
+                <input type="hidden" name="auto_title_enabled" value="0">
+                <x-form.checkbox
+                    name="auto_title_enabled"
+                    label="会話内容からタイトルを自動生成する"
+                    value="1"
+                    :checked="(bool) old('auto_title_enabled', true)"
+                />
+            </div>
         </form>
     </x-slot:body>
     <x-slot:footer>
